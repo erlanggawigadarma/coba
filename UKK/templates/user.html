@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
 {% block title %}Kelola User - My Dashboard{% endblock %}
-{% block active_users %}bg-purple-700{% endblock %}
+{% block active_user %}bg-purple-700 dark:bg-gray-900{% endblock %}
 
 {% block content %}
 <div class="flex justify-between items-center mb-6">
     <div>
-        <h2 class="text-3xl font-bold mb-2">👤 Kelola User</h2>
-        <p class="text-gray-600">Manajemen user dan hak akses</p>
+        <h2 class="text-3xl font-bold mb-2 text-gray-800 dark:text-white">👤 Kelola User</h2>
+        <p class="text-gray-600 dark:text-gray-400">Manajemen user dan hak akses</p>
     </div>
-    <a href="{{ url_for('add_user') }}" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition font-bold shadow-lg hover:shadow-xl flex items-center gap-2">
+    <a href="{{ url_for('add_user') }}" class="bg-green-600 dark:bg-green-700 text-white px-6 py-3 rounded-lg hover:bg-green-700 dark:hover:bg-green-600 transition font-bold shadow-lg flex items-center gap-2">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
         </svg>
@@ -17,35 +17,24 @@
     </a>
 </div>
 
-<!-- Stats -->
-<div class="grid grid-cols-3 gap-6 mb-8">
-    <div class="bg-white p-6 rounded-lg shadow">
-        <p class="text-gray-500 text-sm font-semibold mb-1">Total User</p>
-        <p class="text-3xl font-bold text-purple-600">5</p>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border dark:border-gray-700">
+        <p class="text-gray-500 dark:text-gray-400 text-sm font-semibold mb-1">Total User</p>
+        <p class="text-3xl font-bold text-purple-600 dark:text-purple-400">{{ total_user }}</p>
     </div>
-    <div class="bg-white p-6 rounded-lg shadow">
-        <p class="text-gray-500 text-sm font-semibold mb-1">Admin</p>
-        <p class="text-3xl font-bold text-red-600">2</p>
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border dark:border-gray-700">
+        <p class="text-gray-500 dark:text-gray-400 text-sm font-semibold mb-1">Admin</p>
+        <p class="text-3xl font-bold text-red-600 dark:text-red-400">{{ count_admin }}</p>
     </div>
-    <div class="bg-white p-6 rounded-lg shadow">
-        <p class="text-gray-500 text-sm font-semibold mb-1">User Biasa</p>
-        <p class="text-3xl font-bold text-blue-600">3</p>
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border dark:border-gray-700">
+        <p class="text-gray-500 dark:text-gray-400 text-sm font-semibold mb-1">Guru / User</p>
+        <p class="text-3xl font-bold text-blue-600 dark:text-blue-400">{{ count_guru }}</p>
     </div>
 </div>
 
-<!-- Table -->
-<div class="bg-white rounded-lg shadow-lg overflow-hidden">
-    <div class="p-4 bg-gray-50 border-b flex justify-between items-center">
-        <input type="text" placeholder="🔍 Cari user..." class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600 w-96">
-        <select class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600">
-            <option>Semua Role</option>
-            <option>Admin</option>
-            <option>User</option>
-        </select>
-    </div>
-    
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden border dark:border-gray-700">
     <table class="w-full">
-        <thead class="bg-purple-600 text-white">
+        <thead class="bg-purple-600 dark:bg-purple-900 text-white">
             <tr>
                 <th class="p-4 text-left">No</th>
                 <th class="p-4 text-left">Username</th>
@@ -55,82 +44,38 @@
                 <th class="p-4 text-left">Aksi</th>
             </tr>
         </thead>
-        <tbody>
-            <tr class="border-b hover:bg-purple-50 transition">
-                <td class="p-4">1</td>
-                <td class="p-4 font-semibold">admin</td>
-                <td class="p-4">admin@dashboard.com</td>
+        <tbody class="text-gray-700 dark:text-gray-300">
+            {% for u in users %}
+            <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-purple-50 dark:hover:bg-gray-700 transition">
+                <td class="p-4">{{ loop.index }}</td>
+                <td class="p-4 font-semibold text-gray-900 dark:text-white">{{ u['username'] }}</td>
+                <td class="p-4">{{ u['email'] }}</td>
                 <td class="p-4">
-                    <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold">admin</span>
+                    {% if u['role'] == 'admin' %}
+                        <span class="px-3 py-1 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded-full text-xs font-bold">Admin</span>
+                    {% else %}
+                        <span class="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs font-bold">Guru</span>
+                    {% endif %}
                 </td>
                 <td class="p-4">
-                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold">Aktif</span>
+                    <span class="px-3 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs font-bold">Aktif</span>
                 </td>
-                <td class="p-4">
-                    <button class="text-blue-600 hover:text-blue-800 mr-3">✏️ Edit</button>
-                    <button class="text-red-600 hover:text-red-800">🗑️ Hapus</button>
-                </td>
-            </tr>
-            <tr class="border-b hover:bg-purple-50 transition">
-                <td class="p-4">2</td>
-                <td class="p-4 font-semibold">user1</td>
-                <td class="p-4">user1@dashboard.com</td>
-                <td class="p-4">
-                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold">user</span>
-                </td>
-                <td class="p-4">
-                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold">Aktif</span>
-                </td>
-                <td class="p-4">
-                    <button class="text-blue-600 hover:text-blue-800 mr-3">✏️ Edit</button>
-                    <button class="text-red-600 hover:text-red-800">🗑️ Hapus</button>
+                <td class="p-4 flex gap-2">
+                    <button class="text-blue-600 dark:text-blue-400 hover:text-blue-800 font-bold text-sm">✏️ Edit</button>
+                    {% if u['username'] != 'operator' %}
+                        <a href="{{ url_for('delete_user', user_id=u['id']) }}"
+                           onclick="return confirm('Yakin hapus?')"
+                           class="text-red-600 dark:text-red-400 hover:text-red-800 font-bold text-sm">🗑️ Hapus</a>
+                    {% else %}
+                        <span class="text-gray-400 dark:text-gray-500 text-xs cursor-not-allowed">🔒 Terkunci</span>
+                    {% endif %}
                 </td>
             </tr>
-            <tr class="border-b hover:bg-purple-50 transition">
-                <td class="p-4">3</td>
-                <td class="p-4 font-semibold">john_doe</td>
-                <td class="p-4">john@dashboard.com</td>
-                <td class="p-4">
-                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold">user</span>
-                </td>
-                <td class="p-4">
-                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold">Aktif</span>
-                </td>
-                <td class="p-4">
-                    <button class="text-blue-600 hover:text-blue-800 mr-3">✏️ Edit</button>
-                    <button class="text-red-600 hover:text-red-800">🗑️ Hapus</button>
-                </td>
+            {% else %}
+            <tr>
+                <td colspan="6" class="p-6 text-center text-gray-500 dark:text-gray-400">Belum ada data user.</td>
             </tr>
-            <tr class="border-b hover:bg-purple-50 transition">
-                <td class="p-4">4</td>
-                <td class="p-4 font-semibold">superadmin</td>
-                <td class="p-4">superadmin@dashboard.com</td>
-                <td class="p-4">
-                    <span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-bold">admin</span>
-                </td>
-                <td class="p-4">
-                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-bold">Aktif</span>
-                </td>
-                <td class="p-4">
-                    <button class="text-blue-600 hover:text-blue-800 mr-3">✏️ Edit</button>
-                    <button class="text-red-600 hover:text-red-800">🗑️ Hapus</button>
-                </td>
-            </tr>
-            <tr class="border-b hover:bg-purple-50 transition">
-                <td class="p-4">5</td>
-                <td class="p-4 font-semibold">jane_smith</td>
-                <td class="p-4">jane@dashboard.com</td>
-                <td class="p-4">
-                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-bold">user</span>
-                </td>
-                <td class="p-4">
-                    <span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-bold">Nonaktif</span>
-                </td>
-                <td class="p-4">
-                    <button class="text-blue-600 hover:text-blue-800 mr-3">✏️ Edit</button>
-                    <button class="text-red-600 hover:text-red-800">🗑️ Hapus</button>
-                </td>
-            </tr>
+            {% endfor %}
         </tbody>
     </table>
 </div>
