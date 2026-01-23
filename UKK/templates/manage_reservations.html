@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Konfirmasi Reservasi - My Dashboard{% endblock %}
+
+{% block content %}
+<h2 class="text-3xl font-bold mb-6 text-gray-800 dark:text-white">📩 Konfirmasi Reservasi Masuk</h2>
+
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden border dark:border-gray-700">
+    <table class="w-full">
+        <thead class="bg-purple-600 dark:bg-purple-900 text-white">
+            <tr>
+                <th class="p-4 text-left">Pemohon</th>
+                <th class="p-4 text-left">Waktu</th>
+                <th class="p-4 text-left">Detail</th>
+                <th class="p-4 text-left">Aksi</th>
+            </tr>
+        </thead>
+        <tbody class="text-gray-700 dark:text-gray-300">
+            {% for req in pending_list %}
+            <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-purple-50 dark:hover:bg-gray-700 transition">
+                <td class="p-4 font-bold">{{ req['requester'] }}</td>
+                <td class="p-4">
+                    {{ req['reservation_date'] }}<br>
+                    <span class="text-sm font-semibold">{{ req['start_time'] }} - {{ req['end_time'] }}</span>
+                </td>
+                <td class="p-4">
+                    <div class="font-bold">PJ: {{ req['pic_name'] }}</div>
+                    <div class="text-sm italic text-gray-500 dark:text-gray-400">Ket: "{{ req['description'] }}"</div>
+                </td>
+                <td class="p-4 flex flex-col gap-2">
+                    <a href="{{ url_for('approve', id=req['id']) }}" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm font-bold text-center shadow transition">
+                        ✅ Setujui
+                    </a>
+                    <form action="{{ url_for('reject', id=req['id']) }}" method="POST" onsubmit="return promptReason(this)">
+                        <input type="hidden" name="reason">
+                        <button type="submit" class="w-full bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm font-bold shadow transition">
+                            ❌ Tolak
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" class="p-8 text-center text-gray-500 dark:text-gray-400">
+                    Tidak ada permintaan reservasi baru.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script>
+    function promptReason(form) {
+        let reason = prompt("Masukkan alasan penolakan:", "Jadwal bentrok");
+        if (reason === null || reason.trim() === "") return false;
+        form.querySelector('input[name="reason"]').value = reason;
+        return true;
+    }
+</script>
+{% endblock %}

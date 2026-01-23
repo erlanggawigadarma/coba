@@ -19,7 +19,6 @@
             </div>
         </div>
     </div>
-
     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition border dark:border-gray-700">
         <div class="flex items-center justify-between">
             <div>
@@ -32,7 +31,6 @@
             </div>
         </div>
     </div>
-
     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg hover:shadow-xl transition border dark:border-gray-700">
         <div class="flex items-center justify-between">
             <div>
@@ -52,10 +50,8 @@
     <table class="w-full">
         <thead class="bg-purple-600 dark:bg-purple-900 text-white">
             <tr>
-                <th class="p-4 text-left">Jam</th>
-                <th class="p-4 text-left">Penanggung Jawab</th>
-                <th class="p-4 text-left">Keterangan</th>
-                <th class="p-4 text-left">Tanggal</th>
+                <th class="p-4 text-left">Tanggal & Jam</th>
+                <th class="p-4 text-left">Info</th>
                 <th class="p-4 text-left">Status</th>
             </tr>
         </thead>
@@ -63,28 +59,41 @@
             {% if loggedin %}
                 {% for res in my_reservations %}
                 <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-purple-50 dark:hover:bg-gray-700 transition">
-                    <td class="p-4 font-semibold">{{ res['start_time'] }} - {{ res['end_time'] }}</td>
-                    <td class="p-4">{{ res['pic_name'] }}</td>
-                    <td class="p-4">{{ res['description'] }}</td>
-                    <td class="p-4">{{ res['reservation_date'] }}</td>
                     <td class="p-4">
-                        <span class="px-2 py-1 text-xs font-bold rounded-full
-                            {% if res['status'] == 'Aktif' %} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
-                            {% elif res['status'] == 'Selesai' %} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300
-                            {% else %} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 {% endif %}">
-                            {{ res['status'] }}
-                        </span>
+                        {{ res['reservation_date'] }}<br>
+                        <span class="text-xs font-bold">{{ res['start_time'] }} - {{ res['end_time'] }}</span>
+                    </td>
+                    <td class="p-4">
+                        <div class="font-bold">{{ res['pic_name'] }}</div>
+                        <div class="text-sm italic">{{ res['description'] }}</div>
+                    </td>
+                    <td class="p-4">
+                        {% if res['status'] == 'Menunggu' %}
+                            <span class="px-2 py-1 bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 border border-yellow-300 rounded text-xs font-bold">
+                                ⏳ Menunggu Konfirmasi
+                            </span>
+                        {% elif res['status'] == 'Ditolak' %}
+                            <div class="flex flex-col items-start gap-1">
+                                <span class="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border border-red-300 rounded text-xs font-bold">
+                                    ❌ Ditolak
+                                </span>
+                                <span class="text-xs text-red-500 italic">"{{ res['rejection_reason'] }}"</span>
+                            </div>
+                        {% else %}
+                            <span class="px-2 py-1 text-xs font-bold rounded-full
+                                {% if res['status'] == 'Aktif' %} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                {% elif res['status'] == 'Selesai' %} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300
+                                {% else %} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 {% endif %}">
+                                {{ res['status'] }}
+                            </span>
+                        {% endif %}
                     </td>
                 </tr>
                 {% else %}
-                <tr>
-                    <td colspan="5" class="p-6 text-center text-gray-500 dark:text-gray-400">Anda belum memiliki reservasi.</td>
-                </tr>
+                <tr><td colspan="3" class="p-6 text-center text-gray-500 dark:text-gray-400">Belum ada reservasi.</td></tr>
                 {% endfor %}
             {% else %}
-                <tr>
-                    <td colspan="5" class="p-6 text-center text-gray-500 dark:text-gray-400">Silakan login untuk melihat reservasi Anda.</td>
-                </tr>
+                <tr><td colspan="3" class="p-6 text-center text-gray-500 dark:text-gray-400">Silakan login.</td></tr>
             {% endif %}
         </tbody>
     </table>
