@@ -163,13 +163,22 @@ def dashboard():
                                 (today_str,)).fetchone()[0]
     total_today = masuk_today + keluar_today
 
-    # 3. Ambil Reservasi Saya (Untuk User melihat status Request-nya)
+    # 3. Ambil Data Reservasi
     my_reservations = []
+    todays_schedule = []
+
     if session.get('loggedin'):
+        # A. Jika Login: Ambil reservasi milik user tersebut (Status apapun)
         user_id = session['id']
-        # User melihat SEMUA status (Menunggu, Ditolak, Terjadwal, dll)
         my_reservations = conn.execute('SELECT * FROM reservations WHERE user_id = ? ORDER BY id DESC LIMIT 5',
                                        (user_id,)).fetchall()
+    else:
+        # B. Jika TIDAK Login: Ambil Jadwal HARI INI yang disetujui (Untuk Info Publik)
+        todays_schedule = conn.execute('''
+            SELECT * FROM reservations 
+            WHERE reservation_date = ? AND status IN ('Aktif', 'Terjadwal', 'Selesai')
+            ORDER BY start_time ASC
+        ''', (today_str,)).fetchall()
 
     conn.close()
 
@@ -180,7 +189,9 @@ def dashboard():
                            total_today=total_today,
                            masuk_today=masuk_today,
                            keluar_today=keluar_today,
-                           my_reservations=my_reservations)
+                           my_reservations=my_reservations,
+                           todays_schedule=todays_schedule) # <-- Variabel Baru
+
 
 
 # --- SCHEDULE (Jadwal Publik) ---
