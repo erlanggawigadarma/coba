@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Reservasi Saya - My Dashboard{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-3xl font-bold text-gray-800 dark:text-white">📂 Riwayat Reservasi Anda</h2>
+    <a href="{{ url_for('reservation') }}" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg font-bold transition shadow-lg">
+        + Buat Reservasi Baru
+    </a>
+</div>
+
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden border border-purple-200 dark:border-purple-900/50">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-purple-700 dark:bg-purple-900 text-white text-sm">
+                    <th class="p-4 border-r border-purple-600 dark:border-purple-800">Tanggal</th>
+                    <th class="p-4 border-r border-purple-600 dark:border-purple-800">Waktu</th>
+                    <th class="p-4 border-r border-purple-600 dark:border-purple-800">Kegiatan / Deskripsi</th>
+                    <th class="p-4 border-r border-purple-600 dark:border-purple-800">Status</th>
+                    <th class="p-4">Catatan Admin</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-purple-100 dark:divide-purple-900/30 text-gray-700 dark:text-gray-300">
+                {% for res in my_full_list %}
+                <tr class="hover:bg-purple-50 dark:hover:bg-purple-900/20 transition">
+                    <td class="p-4 font-semibold">{{ res['reservation_date'] }}</td>
+                    <td class="p-4">{{ res['start_time'] }} - {{ res['end_time'] }}</td>
+                    <td class="p-4">{{ res['description'] }}</td>
+                    <td class="p-4">
+                        {% if res['status'] == 'Menunggu' %}
+                            <span class="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-400 px-3 py-1 rounded-full text-xs font-bold italic">⏳ Menunggu</span>
+                        {% elif res['status'] == 'Ditolak' %}
+                            <span class="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400 px-3 py-1 rounded-full text-xs font-bold">❌ Ditolak</span>
+                        {% else %}
+                            <span class="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold">✅ {{ res['status'] }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="p-4 text-sm">
+                        {% if res['status'] == 'Ditolak' %}
+                            <span class="text-red-500 dark:text-red-400 italic">{{ res['rejection_reason'] }}</span>
+                        {% elif res['status'] == 'Menunggu' %}
+                            <span class="text-gray-400 dark:text-gray-500 text-xs">Menunggu verifikasi...</span>
+                        {% else %}
+                            <span class="text-green-600 dark:text-green-400 text-xs font-medium">Jadwal telah dipublikasikan</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="p-10 text-center text-gray-500 dark:text-gray-400 italic">
+                        Anda belum pernah melakukan pengajuan reservasi.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

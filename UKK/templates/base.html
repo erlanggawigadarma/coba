@@ -9,196 +9,225 @@
         tailwind.config = { darkMode: 'class' }
     </script>
     <style>
-        #sidebar, #navbar, #mainContent, body, .card-transition { transition: all 0.3s ease-in-out; }
+        body {
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .app-wrapper {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #sidebar {
+            flex-shrink: 0;
+            transition: width 0.3s ease-in-out;
+            z-index: 50;
+        }
+
+        /* Sidebar bisa scroll secara mandiri */
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .sidebar-content::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+
+        #rightSide {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        #mainContent {
+            flex: 1;
+            padding: 2rem;
+        }
+
         .sidebar-text { transition: opacity 0.2s ease; }
-        #loginModal { transition: opacity 0.3s ease; }
-        .modal-content { transition: transform 0.3s ease; }
-        .flash-message { transition: opacity 0.5s ease-in-out; }
         html.dark { color-scheme: dark; }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 dark:text-white font-sans" id="body">
-    <div class="flex">
-        <div id="sidebar" class="w-64 bg-purple-700 dark:bg-gray-900 text-white min-h-screen shadow-2xl border-r-2 border-purple-600 dark:border-gray-700 fixed left-0 top-0 z-30">
-            <div class="flex flex-col h-full p-4 relative">
+<body class="bg-gray-100 dark:bg-gray-900 dark:text-white font-sans">
+    <div class="app-wrapper">
 
-                <div class="flex-1">
-                    <div class="mb-4 pb-3 border-b border-purple-600 dark:border-gray-700">
-                        <button onclick="toggleSidebar()" class="w-full flex items-center gap-3 bg-purple-600 dark:bg-gray-800 hover:bg-purple-500 dark:hover:bg-gray-700 p-3 rounded-lg transition">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                            <span class="sidebar-text font-semibold">Sidebar</span>
-                        </button>
-                    </div>
+        <div id="sidebar" class="w-64 bg-purple-700 dark:bg-gray-900 text-white shadow-2xl border-r-2 border-purple-600 dark:border-gray-700 h-full flex flex-col">
 
-                    <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition {% block active_dashboard %}{% endblock %}">
-                        <span class="text-xl">🏠</span><span class="sidebar-text">Dashboard</span>
-                    </a>
-                    <a href="{{ url_for('schedule') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition {% block active_schedule %}{% endblock %}">
-                        <span class="text-xl">📅</span><span class="sidebar-text">Jadwal</span>
-                    </a>
-
-                    {% if loggedin %}
-                        <a href="{{ url_for('reservation') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition {% block active_reservation %}{% endblock %}">
-                            <span class="text-xl">➕</span><span class="sidebar-text">Reservasi</span>
-                        </a>
-
-                        {% if role == 'admin' %}
-                            <div class="border-t border-purple-500 dark:border-gray-700 my-3"></div>
-                            <div class="text-xs text-purple-200 dark:text-gray-400 px-3 mb-2 font-bold sidebar-text">ADMIN MENU</div>
-
-                            <a href="{{ url_for('manage_reservations') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
-                                <span class="text-xl">📩</span><span class="sidebar-text">Konfirmasi</span>
-                            </a>
-
-                            <a href="{{ url_for('user') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition {% block active_user %}{% endblock %}">
-                                <span class="text-xl">👤</span><span class="sidebar-text">User</span>
-                            </a>
-                            <a href="{{ url_for('add_user') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition {% block active_add_user %}{% endblock %}">
-                                <span class="text-xl">👥</span><span class="sidebar-text">Tambah User</span>
-                            </a>
-                        {% endif %}
-                    {% endif %}
+            <div class="sidebar-content p-4">
+                <div class="mb-4 pb-3 border-b border-purple-600 dark:border-gray-700">
+                    <button onclick="toggleSidebar()" class="w-full flex items-center gap-3 bg-purple-600 dark:bg-gray-800 hover:bg-purple-500 dark:hover:bg-gray-700 p-3 rounded-lg transition">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        <span class="sidebar-text font-semibold">Sidebar</span>
+                    </button>
                 </div>
 
+                <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
+                    <span class="text-xl">🏠</span><span class="sidebar-text">Dashboard</span>
+                </a>
+                <a href="{{ url_for('schedule') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
+                    <span class="text-xl">📅</span><span class="sidebar-text">Jadwal</span>
+                </a>
+
                 {% if loggedin %}
-                   <div class="mt-auto pt-4 border-t border-purple-600 dark:border-gray-700">
-                       <a href="{{ url_for('logout') }}" id="logoutBtn" class="flex items-center gap-3 p-3 rounded text-red-200 hover:text-white hover:bg-red-600 transition-all duration-300 group">
-                           <span class="text-xl group-hover:scale-110 transition-transform">🚪</span>
-                           <span class="sidebar-text font-bold">Keluar</span>
-                       </a>
-                   </div>
+                    <div class="border-t border-purple-500 dark:border-gray-700 my-3"></div>
+                    <div class="text-xs text-purple-200 dark:text-gray-400 px-3 mb-2 font-bold sidebar-text uppercase">User Menu</div>
+                    <a href="{{ url_for('my_reservations') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
+                        <span class="text-xl">📂</span><span class="sidebar-text">Reservasi Saya</span>
+                    </a>
+                    <a href="{{ url_for('reservation') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
+                        <span class="text-xl">➕</span><span class="sidebar-text">Buat Reservasi</span>
+                    </a>
+
+                    {% if role == 'admin' %}
+                        <div class="border-t border-purple-500 dark:border-gray-700 my-3"></div>
+                        <div class="text-xs text-purple-200 dark:text-gray-400 px-3 mb-2 font-bold sidebar-text uppercase">Admin Menu</div>
+                        <a href="{{ url_for('user') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
+                            <span class="text-xl">👤</span><span class="sidebar-text">User</span>
+                        </a>
+                        <a href="{{ url_for('manage_reservations') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
+                            <span class="text-xl">📩</span><span class="sidebar-text">Konfirmasi</span>
+                        </a>
+                        <a href="{{ url_for('add_user') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
+                            <span class="text-xl">👥</span><span class="sidebar-text">Tambah User</span>
+                        </a>
+                    {% endif %}
                 {% endif %}
             </div>
+
+            {% if loggedin %}
+               <div class="p-4 border-t border-purple-600 dark:border-gray-700 bg-purple-700 dark:bg-gray-900">
+                   <a href="{{ url_for('logout') }}" class="flex items-center gap-3 p-3 rounded text-red-200 hover:text-white hover:bg-red-600 transition group">
+                       <span class="text-xl group-hover:scale-110 transition-transform">🚪</span>
+                       <span class="sidebar-text font-bold">Keluar</span>
+                   </a>
+               </div>
+            {% endif %}
         </div>
 
-        <div id="rightSide" class="flex-1 ml-64 min-h-screen flex flex-col">
+        <div id="rightSide">
             <nav id="navbar" class="bg-purple-500 dark:bg-gray-800 text-white p-4 shadow-lg sticky top-0 z-20 border-b dark:border-gray-700">
                 <div class="flex justify-between items-center px-4">
                     <div class="flex items-center gap-3">
-                        <div class="bg-white dark:bg-gray-700 p-2 rounded-lg shadow-md">
+                        <div class="bg-white dark:bg-gray-700 p-2 rounded-lg">
                             <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"></path></svg>
                         </div>
-                        <div>
-                            <div class="text-xl font-bold">My Dashboard</div>
-                            <div class="text-xs opacity-90">Sistem Manajemen Pengunjung</div>
-                        </div>
+                        <div class="hidden sm:block text-xl font-bold">My Dashboard</div>
                     </div>
 
                     <div class="flex items-center gap-4">
                         {% if loggedin %}
-                            <span class="px-3 py-1 bg-purple-600 dark:bg-gray-700 rounded-full text-xs font-bold capitalize border dark:border-gray-600">
+                            <span class="hidden md:inline-block px-3 py-1 bg-purple-600 dark:bg-gray-700 rounded-full text-xs font-bold border dark:border-gray-600 uppercase">
                                 {{ role }} | {{ username }}
                             </span>
                         {% else %}
-                            <button onclick="toggleLoginModal()" class="bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-600 px-4 py-1 rounded font-bold shadow transition flex items-center gap-2 text-sm">
+                            <button onclick="toggleLoginModal()" class="bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-600 px-4 py-1.5 rounded font-bold shadow transition text-sm">
                                 Login
                             </button>
                         {% endif %}
 
-                        <span class="flex items-center gap-1 font-semibold">
-                            <span id="clock">00:00:00</span>
-                        </span>
+                        <span id="clock" class="font-bold text-sm">00:00:00</span>
 
                         <button onclick="toggleDarkMode()" class="bg-purple-600 dark:bg-gray-700 hover:bg-purple-700 dark:hover:bg-gray-600 p-2 rounded-lg transition border dark:border-gray-600">
                             <svg id="darkModeIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
                         </button>
+
+                        {% if loggedin and role == 'admin' %}
+                        <a href="{{ url_for('logout') }}" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition font-bold text-xs flex items-center gap-2">
+                            <span>🚪</span> Keluar
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
             </nav>
 
-            <div class="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-lg pointer-events-none">
-                <div class="flex flex-col items-center gap-2">
-                    {% with messages = get_flashed_messages(with_categories=true) %}
-                        {% if messages %}
-                            {% for category, message in messages %}
-                                <div class="flash-message pointer-events-auto p-4 rounded-lg shadow-2xl text-white font-bold min-w-[350px] text-center flex justify-between items-center {% if category == 'danger' or category == 'warning' %} bg-red-600 dark:bg-red-800 {% else %} bg-green-600 dark:bg-green-800 {% endif %}">
-                                    <span class="flex-1">{{ message }}</span>
-                                    <button onclick="this.parentElement.remove()" class="ml-4 hover:text-gray-200">✕</button>
-                                </div>
-                            {% endfor %}
-                        {% endif %}
-                    {% endwith %}
-                </div>
-            </div>
-
-            <div id="mainContent" class="p-8 flex-1">
+            <div id="mainContent">
                 {% block content %}{% endblock %}
             </div>
 
-            <footer class="bg-gray-800 dark:bg-black text-white p-6 border-t dark:border-gray-800" id="footer">
-                <div class="container mx-auto text-center">
-                    <p>&copy; 2024 My Dashboard. Hak cipta dilindungi.</p>
-                </div>
+            <footer class="bg-gray-800 dark:bg-black text-white p-6 border-t dark:border-gray-800 text-center">
+                <p>&copy; 2024 My Dashboard. Hak cipta dilindungi.</p>
             </footer>
         </div>
     </div>
 
-    <div id="loginModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
-        <div class="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity" onclick="toggleLoginModal()"></div>
-        <div class="flex items-center justify-center min-h-screen p-4 text-center sm:p-0">
-            <div class="relative bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-md w-full modal-content">
-                <div class="bg-purple-600 dark:bg-gray-900 px-4 py-3 flex justify-between items-center">
-                    <h3 class="text-lg leading-6 font-bold text-white">🔐 Login System</h3>
-                    <button onclick="toggleLoginModal()" class="text-white hover:text-gray-200">✕</button>
+    <div id="loginModal" class="hidden fixed inset-0 z-[100] overflow-y-auto">
+        <div class="fixed inset-0 bg-black bg-opacity-50" onclick="toggleLoginModal()"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full overflow-hidden">
+                <div class="bg-purple-600 p-4 flex justify-between items-center text-white font-bold">
+                    <span>🔐 Login System</span>
+                    <button onclick="toggleLoginModal()">✕</button>
                 </div>
                 <form action="{{ url_for('login') }}" method="POST" class="p-6">
-                    <div class="mb-4">
-                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">Username</label>
-                        <input type="text" name="username" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-purple-600 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white" required>
+                    <div class="mb-4 text-left">
+                        <label class="block text-sm font-bold mb-2">Username</label>
+                        <input type="text" name="username" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" required>
                     </div>
-                    <div class="mb-6">
-                        <label class="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">Password</label>
-                        <input type="password" name="password" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-purple-600 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white" required>
+                    <div class="mb-6 text-left">
+                        <label class="block text-sm font-bold mb-2">Password</label>
+                        <input type="password" name="password" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" required>
                     </div>
-                    <button type="submit" class="w-full bg-purple-600 dark:bg-purple-700 text-white font-bold py-2 px-4 rounded hover:bg-purple-700 dark:hover:bg-purple-600 transition shadow-md">Masuk</button>
+                    <button type="submit" class="w-full bg-purple-600 text-white font-bold py-2 rounded">Masuk</button>
                 </form>
             </div>
         </div>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const flashMessages = document.querySelectorAll('.flash-message');
-            flashMessages.forEach(msg => { setTimeout(() => { msg.style.opacity = '0'; setTimeout(() => msg.remove(), 500); }, 3000); });
-        });
-        function toggleLoginModal() { document.getElementById('loginModal').classList.toggle('hidden'); }
-        function updateClock() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('id-ID', { hour12: false }); }
-        updateClock(); setInterval(updateClock, 1000);
-
-        const html = document.documentElement;
-        const darkModeIcon = document.getElementById('darkModeIcon');
-        const moonIcon = '<path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>';
-        const sunIcon = '<path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"></path>';
-
-        function toggleDarkMode() {
-            html.classList.toggle('dark');
-            const isDark = html.classList.contains('dark');
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            darkModeIcon.innerHTML = isDark ? sunIcon : moonIcon;
-        }
-
-        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            html.classList.add('dark'); darkModeIcon.innerHTML = sunIcon;
-        } else {
-            html.classList.remove('dark'); darkModeIcon.innerHTML = moonIcon;
-        }
-
-        // Logic Sidebar (Disederhanakan untuk tombol logout baru)
         let sidebarCollapsed = false;
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const rightSide = document.getElementById('rightSide');
             const sidebarTexts = document.querySelectorAll('.sidebar-text');
-
-            if (!sidebarCollapsed) { // Collapse
-                sidebarTexts.forEach(text => { text.style.opacity = '0'; setTimeout(() => text.style.display = 'none', 200); });
-                setTimeout(() => { sidebar.style.width = '80px'; rightSide.style.marginLeft = '80px'; }, 300);
-            } else { // Expand
-                sidebar.style.width = '256px'; rightSide.style.marginLeft = '256px';
-                sidebarTexts.forEach(text => { text.style.display = 'inline'; setTimeout(() => text.style.opacity = '1', 100); });
+            if (!sidebarCollapsed) {
+                sidebarTexts.forEach(t => t.style.display = 'none');
+                sidebar.style.width = '80px';
+            } else {
+                sidebar.style.width = '256px';
+                setTimeout(() => { sidebarTexts.forEach(t => t.style.display = 'inline'); }, 200);
             }
             sidebarCollapsed = !sidebarCollapsed;
         }
+
+        function toggleLoginModal() { document.getElementById('loginModal').classList.toggle('hidden'); }
+        function updateClock() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('id-ID', { hour12: false }); }
+        setInterval(updateClock, 1000); updateClock();
+
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+        }
+        if (localStorage.theme === 'dark') document.documentElement.classList.add('dark');
+
+        // FUNGSI AUTO REFRESH STATISTIK (Hanya mengambil data hari ini)
+        function refreshStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    const m = document.getElementById('display-masuk');
+                    const k = document.getElementById('display-keluar');
+                    const t = document.getElementById('display-total');
+
+                    if(m) m.innerText = data.masuk;
+                    if(k) k.innerText = data.keluar;
+                    if(t) t.innerText = data.total;
+                })
+                .catch(error => console.error('Gagal mengambil data IoT:', error));
+        }
+
+        // Interval 1 detik untuk update statistik pengunjung
+        setInterval(refreshStats, 1000);
     </script>
 </body>
 </html>

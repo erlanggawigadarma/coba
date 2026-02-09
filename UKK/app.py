@@ -27,7 +27,7 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             email TEXT,
             password TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'guru'
+            role TEXT NOT NULL DEFAULT 'user'
         )
     ''')
 
@@ -66,7 +66,6 @@ def init_db():
                   ('operator', 'operator@mail.id', 'admin123', 'admin'))
     conn.commit()
     conn.close()
-
 
 # --- HELPER: HITUNG STATUS BERDASARKAN WAKTU ---
 def calculate_status(date_str, start_str, end_str):
@@ -193,23 +192,64 @@ def dashboard():
                            todays_schedule=todays_schedule) # <-- Variabel Baru
 
 
+# --- HALAMAN RESERVASI SAYA (FULL LIST) ---
+@app.route('/my_reservations')
+def my_reservations():
+    if not session.get('loggedin'):
+        flash('Silahkan login terlebih dahulu.', 'warning')
+        return redirect(url_for('dashboard'))
+
+    user_id = session['id']
+    conn = get_db_connection()
+
+    # Mengambil semua reservasi milik user yang sedang login
+    my_full_list = conn.execute('''
+        SELECT * FROM reservations 
+        WHERE user_id = ? 
+        ORDER BY reservation_date DESC, start_time DESC
+    ''', (user_id,)).fetchall()
+
+    conn.close()
+
+    return render_template('my_reservations.html',
+                           my_full_list=my_full_list,
+                           loggedin=True,
+                           role=session.get('role'),
+                           now_date=date.today().strftime('%Y-%m-%d'),
+                           username=session.get('username'))
 
 # --- SCHEDULE (Jadwal Publik) ---
 @app.route('/schedule')
 def schedule():
-    update_all_reservation_statuses()
+    update_all_reservation_statuses() # Memperbarui status jadwal secara real-time
     conn = get_db_connection()
+    today_str = date.today().strftime('%Y-%m-%d') # Mendapatkan tanggal hari ini
 
-    # FILTER: Hanya tampilkan yang sudah DISETUJUI (Terjadwal/Aktif/Selesai)
-    # Sembunyikan 'Menunggu' dan 'Ditolak' dari publik
-    reservations = conn.execute(
-        "SELECT * FROM reservations WHERE status NOT IN ('Menunggu', 'Ditolak') ORDER BY reservation_date DESC, start_time ASC").fetchall()
+    # Cek apakah pengguna adalah admin (operator)
+    if session.get('loggedin') and session.get('role') == 'admin':
+        # Admin dapat melihat SEMUA riwayat jadwal (termasuk yang sudah lewat)
+        query = """
+            SELECT * FROM reservations 
+            WHERE status NOT IN ('Menunggu', 'Ditolak') 
+            ORDER BY reservation_date DESC, start_time ASC
+        """
+        reservations = conn.execute(query).fetchall()
+    else:
+        # User/Tamu hanya melihat jadwal hari ini dan seterusnya
+        query = """
+            SELECT * FROM reservations 
+            WHERE status NOT IN ('Menunggu', 'Ditolak') 
+            AND reservation_date >= ? 
+            ORDER BY reservation_date ASC, start_time ASC
+        """
+        reservations = conn.execute(query, (today_str,)).fetchall()
 
     conn.close()
     return render_template('schedule.html',
                            jadwal=reservations,
                            loggedin=session.get('loggedin'),
                            role=session.get('role'),
+                           now_date=date.today().strftime('%Y-%m-%d'),
                            username=session.get('username'))
 
 
@@ -335,7 +375,7 @@ def user():
                            users=users,
                            total_user=len(users),
                            count_admin=0,
-                           count_guru=0,
+                           count_user=0,
                            loggedin=True,
                            role='admin',
                            username=session.get('username'))
@@ -401,6 +441,29 @@ def api_sensor():
     else:
         return jsonify({"status": "error", "message": "Invalid direction"}), 400
 
+
+# Tambahkan route ini di dalam file app.py Anda (sebelum blok if __name__ == '__main__':)
+
+# --- API UNTUK DASHBOARD (AUTO-REFRESH & FILTER HARI INI SAJA) ---
+@app.route('/api/stats')
+def get_stats():
+    conn = get_db_connection()
+    # Menggunakan date('now', 'localtime') agar otomatis reset ke 0 saat ganti hari
+    masuk = conn.execute(
+        "SELECT COUNT(*) FROM visitor_logs WHERE direction='in' AND date(timestamp) = date('now', 'localtime')"
+    ).fetchone()[0]
+
+    keluar = conn.execute(
+        "SELECT COUNT(*) FROM visitor_logs WHERE direction='out' AND date(timestamp) = date('now', 'localtime')"
+    ).fetchone()[0]
+
+    conn.close()
+
+    return jsonify({
+        "masuk": masuk,
+        "keluar": keluar,
+        "total": masuk - keluar
+    })
 
 # --- TEST HELPER (Untuk simulasi manual) ---
 @app.route('/test_iot/<direction>')

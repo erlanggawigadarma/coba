@@ -28,33 +28,40 @@
             </tr>
         </thead>
         <tbody class="text-gray-700 dark:text-gray-300">
+            {% set ns = namespace(found=false) %}
             {% for row in jadwal %}
-            <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-purple-50 dark:hover:bg-gray-700 transition">
-                <td class="p-4">{{ row['reservation_date'] }}</td>
-                <td class="p-4 font-semibold">{{ row['start_time'] }} - {{ row['end_time'] }}</td>
-                <td class="p-4 font-bold text-gray-800 dark:text-white">{{ row['pic_name'] }}</td>
-                <td class="p-4">{{ row['description'] }}</td>
-                <td class="p-4 flex items-center gap-2">
-                    {% if row['status'] == 'Aktif' %}
-                        <span class="px-3 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs font-bold">Aktif</span>
-                    {% elif row['status'] == 'Selesai' %}
-                        <span class="px-3 py-1 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 rounded-full text-xs font-bold">Selesai</span>
-                    {% else %}
-                        <span class="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs font-bold">Terjadwal</span>
-                    {% endif %}
+                {# LOGIKA FILTER: Jika admin, tampilkan semua. Jika bukan admin, hanya tampilkan tanggal hari ini atau ke depan #}
+                {% if role == 'admin' or row['reservation_date'] >= now_date %}
+                    {% set ns.found = true %}
+                    <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-purple-50 dark:hover:bg-gray-700 transition">
+                        <td class="p-4">{{ row['reservation_date'] }}</td>
+                        <td class="p-4 font-semibold">{{ row['start_time'] }} - {{ row['end_time'] }}</td>
+                        <td class="p-4 font-bold text-gray-800 dark:text-white">{{ row['pic_name'] }}</td>
+                        <td class="p-4">{{ row['description'] }}</td>
+                        <td class="p-4 flex items-center gap-2">
+                            {% if row['status'] == 'Aktif' %}
+                                <span class="px-3 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full text-xs font-bold">Aktif</span>
+                            {% elif row['status'] == 'Selesai' %}
+                                <span class="px-3 py-1 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 rounded-full text-xs font-bold">Selesai</span>
+                            {% else %}
+                                <span class="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs font-bold">Terjadwal</span>
+                            {% endif %}
 
-                    {% if role == 'admin' %}
-                        <a href="{{ url_for('delete_schedule', id=row['id']) }}" onclick="return confirm('Hapus jadwal ini secara permanen?')" class="text-red-500 hover:text-red-700 ml-2" title="Hapus Jadwal">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="5" class="p-8 text-center text-gray-500 dark:text-gray-400">Belum ada jadwal.</td>
-            </tr>
+                            {% if role == 'admin' %}
+                                <a href="{{ url_for('delete_schedule', id=row['id']) }}" onclick="return confirm('Hapus jadwal ini secara permanen?')" class="text-red-500 hover:text-red-700 ml-2" title="Hapus Jadwal">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endif %}
             {% endfor %}
+
+            {% if not ns.found %}
+            <tr>
+                <td colspan="5" class="p-8 text-center text-gray-500 dark:text-gray-400">Belum ada jadwal hari ini atau mendatang.</td>
+            </tr>
+            {% endif %}
         </tbody>
     </table>
 </div>
