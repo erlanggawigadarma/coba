@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laporan {{ report_type }} - {{ start_date }} s/d {{ end_date }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            @page {
+                size: A4;
+                margin: 1.5cm;
+            }
+            body {
+                background: white;
+                color: black;
+                font-size: 12pt;
+            }
+            .no-break {
+                page-break-inside: avoid;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            table {
+                page-break-inside: auto;
+            }
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            thead {
+                display: table-header-group;
+            }
+            tfoot {
+                display: table-footer-group;
+            }
+        }
+        .print-only {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-white p-6 font-sans">
+
+    <!-- Tombol Cetak (hanya muncul di layar) -->
+    <div class="no-print text-right mb-4">
+        <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg inline-flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h12z"></path>
+                </svg>
+                Cetak / Simpan PDF
+            </button>
+            <a href="{{ url_for('dashboard') }}" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg inline-flex items-center gap-2 ml-2">
+                Kembali
+            </a>
+        </div>
+    </div>
+
+    <!-- Kop Laporan -->
+    <div class="text-center mb-6 border-b-2 border-gray-300 pb-4">
+        <h1 class="text-2xl font-bold text-gray-900 uppercase tracking-wide">LAPORAN {{ report_type|upper }}</h1>
+        <p class="text-gray-700 mt-1">Periode: {{ start_date }} s/d {{ end_date }}</p>
+        <p class="text-gray-500 text-xs mt-1">Dicetak: {{ now().strftime('%d/%m/%Y %H:%M') }} WIB</p>
+    </div>
+
+    {% if report_type == 'Pengunjung' %}
+    <!-- LAPORAN PENGUNJUNG -->
+    <div class="mb-6 no-break">
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h2 class="text-lg font-bold mb-3 text-gray-800 border-b pb-2">📊 RINGKASAN KUNJUNGAN</h2>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-green-50 p-3 rounded border border-green-200 text-center">
+                    <p class="text-green-700 text-xs font-bold uppercase">Total Masuk</p>
+                    <p class="text-3xl font-bold text-green-700">{{ summary.masuk }}</p>
+                    <p class="text-xs text-gray-500">pengunjung</p>
+                </div>
+                <div class="bg-red-50 p-3 rounded border border-red-200 text-center">
+                    <p class="text-red-700 text-xs font-bold uppercase">Total Keluar</p>
+                    <p class="text-3xl font-bold text-red-700">{{ summary.keluar }}</p>
+                    <p class="text-xs text-gray-500">pengunjung</p>
+                </div>
+                <div class="bg-purple-50 p-3 rounded border border-purple-200 text-center">
+                    <p class="text-purple-700 text-xs font-bold uppercase">Total Traffic</p>
+                    <p class="text-3xl font-bold text-purple-700">{{ summary.total }}</p>
+                    <p class="text-xs text-gray-500">pergerakan</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="no-break">
+        <h2 class="text-lg font-bold mb-3 text-gray-800">📋 DATA KUNJUNGAN HARIAN</h2>
+        <table class="w-full border-collapse border border-gray-300 text-sm">
+            <thead>
+                <tr class="bg-gray-100">
+                    <th class="border border-gray-300 p-2 text-left">No</th>
+                    <th class="border border-gray-300 p-2 text-left">Tanggal</th>
+                    <th class="border border-gray-300 p-2 text-left">Hari</th>
+                    <th class="border border-gray-300 p-2 text-right">Masuk</th>
+                    <th class="border border-gray-300 p-2 text-right">Keluar</th>
+                    <th class="border border-gray-300 p-2 text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in daily_data %}
+                <tr>
+                    <td class="border border-gray-300 p-2 text-center">{{ loop.index }}</td>
+                    <td class="border border-gray-300 p-2">{{ item.date }}</td>
+                    <td class="border border-gray-300 p-2">{{ item.day }}</td>
+                    <td class="border border-gray-300 p-2 text-right">{{ item.masuk }}</td>
+                    <td class="border border-gray-300 p-2 text-right">{{ item.keluar }}</td>
+                    <td class="border border-gray-300 p-2 text-right font-bold">{{ item.total }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="bg-gray-50 font-bold">
+                <tr>
+                    <td colspan="3" class="border border-gray-300 p-2 text-right">TOTAL</td>
+                    <td class="border border-gray-300 p-2 text-right">{{ summary.masuk }}</td>
+                    <td class="border border-gray-300 p-2 text-right">{{ summary.keluar }}</td>
+                    <td class="border border-gray-300 p-2 text-right">{{ summary.total }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    {% else %}
+    <!-- LAPORAN RESERVASI -->
+    <div class="mb-6 no-break">
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h2 class="text-lg font-bold mb-3 text-gray-800 border-b pb-2">📅 RINGKASAN RESERVASI</h2>
+            <div class="grid grid-cols-4 gap-3">
+                <div class="bg-gray-100 p-2 rounded text-center">
+                    <p class="text-gray-700 text-xs font-bold uppercase">Total</p>
+                    <p class="text-2xl font-bold">{{ summary.total }}</p>
+                </div>
+                <div class="bg-blue-50 p-2 rounded text-center border border-blue-200">
+                    <p class="text-blue-700 text-xs font-bold uppercase">Terjadwal</p>
+                    <p class="text-2xl font-bold text-blue-700">{{ summary.terjadwal }}</p>
+                </div>
+                <div class="bg-green-50 p-2 rounded text-center border border-green-200">
+                    <p class="text-green-700 text-xs font-bold uppercase">Aktif</p>
+                    <p class="text-2xl font-bold text-green-700">{{ summary.aktif }}</p>
+                </div>
+                <div class="bg-gray-50 p-2 rounded text-center border border-gray-200">
+                    <p class="text-gray-700 text-xs font-bold uppercase">Selesai</p>
+                    <p class="text-2xl font-bold text-gray-700">{{ summary.selesai }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="no-break">
+        <h2 class="text-lg font-bold mb-3 text-gray-800">📋 DAFTAR RESERVASI</h2>
+        <table class="w-full border-collapse border border-gray-300 text-sm">
+            <thead>
+                <tr class="bg-gray-100">
+                    <th class="border border-gray-300 p-2 text-left">No</th>
+                    <th class="border border-gray-300 p-2 text-left">Tanggal</th>
+                    <th class="border border-gray-300 p-2 text-left">Waktu</th>
+                    <th class="border border-gray-300 p-2 text-left">Kegiatan</th>
+                    <th class="border border-gray-300 p-2 text-left">PIC</th>
+                    <th class="border border-gray-300 p-2 text-left">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in reservation_data %}
+                <tr>
+                    <td class="border border-gray-300 p-2 text-center">{{ loop.index }}</td>
+                    <td class="border border-gray-300 p-2">{{ item.date }}</td>
+                    <td class="border border-gray-300 p-2">{{ item.start_time }} - {{ item.end_time }}</td>
+                    <td class="border border-gray-300 p-2">{{ item.description or '-' }}</td>
+                    <td class="border border-gray-300 p-2">{{ item.pic_name }}</td>
+                    <td class="border border-gray-300 p-2">
+                        <span class="px-2 py-1 rounded text-xs
+                            {% if item.status == 'Aktif' %}bg-green-100 text-green-800
+                            {% elif item.status == 'Terjadwal' %}bg-blue-100 text-blue-800
+                            {% elif item.status == 'Selesai' %}bg-gray-100 text-gray-800
+                            {% else %}bg-purple-100 text-purple-800{% endif %}">
+                            {{ item.status }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="border border-gray-300 p-4 text-center text-gray-500">
+                        Tidak ada data reservasi pada periode ini
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Tanda Tangan - HANYA PETUGAS (TANPA KEPSEK) -->
+    <div class="mt-12 pt-4 no-break">
+        <div class="flex justify-end">
+            <div class="text-center w-64">
+                <p class="text-sm text-gray-600">Dicetak oleh,</p>
+                <p class="font-bold text-base mt-2">{{ username or 'Operator' }}</p>
+                <div class="h-16"></div>
+                <p class="border-t border-gray-400 pt-1 mt-8 text-sm">( Tanda Tangan )</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-6 text-center text-xs text-gray-500 border-t pt-2">
+        <p>* Laporan ini digenerate secara otomatis dari sistem My Dashboard</p>
+    </div>
+
+    <script>
+        // Auto print saat halaman dibuka? (opsional)
+        // window.onload = function() {
+        //     setTimeout(() => { window.print(); }, 500);
+        // }
+    </script>
+</body>
+</html>

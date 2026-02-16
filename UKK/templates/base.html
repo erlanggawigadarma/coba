@@ -5,229 +5,323 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}My Dashboard{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         tailwind.config = { darkMode: 'class' }
     </script>
-    <style>
-        body {
-            overflow: hidden;
-            height: 100vh;
-        }
-
-        .app-wrapper {
-            display: flex;
-            height: 100vh;
-            width: 100vw;
-        }
-
-        #sidebar {
-            flex-shrink: 0;
-            transition: width 0.3s ease-in-out;
-            z-index: 50;
-        }
-
-        /* Sidebar bisa scroll secara mandiri */
-        .sidebar-content {
-            flex: 1;
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-
-        .sidebar-content::-webkit-scrollbar {
-            width: 4px;
-        }
-        .sidebar-content::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-        }
-
-        #rightSide {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-            height: 100vh;
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-
-        #mainContent {
-            flex: 1;
-            padding: 2rem;
-        }
-
-        .sidebar-text { transition: opacity 0.2s ease; }
-        html.dark { color-scheme: dark; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 dark:text-white font-sans">
+    <!-- Modal Overlay - Gelap di belakang popup -->
+    <div id="modalOverlay" class="modal-overlay"></div>
+
     <div class="app-wrapper">
 
-        <div id="sidebar" class="w-64 bg-purple-700 dark:bg-gray-900 text-white shadow-2xl border-r-2 border-purple-600 dark:border-gray-700 h-full flex flex-col">
+        <!-- ===== SIDEBAR ===== -->
+        <div id="sidebar" class="w-64 text-white shadow-2xl border-r-2 border-purple-600 dark:border-gray-700">
+            <!-- Sidebar Header (Fixed) -->
+            <div class="sidebar-header">
+                <button onclick="toggleSidebar()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                    <span class="sidebar-text font-semibold">Menu</span>
+                </button>
+            </div>
 
-            <div class="sidebar-content p-4">
-                <div class="mb-4 pb-3 border-b border-purple-600 dark:border-gray-700">
-                    <button onclick="toggleSidebar()" class="w-full flex items-center gap-3 bg-purple-600 dark:bg-gray-800 hover:bg-purple-500 dark:hover:bg-gray-700 p-3 rounded-lg transition">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-                        <span class="sidebar-text font-semibold">Sidebar</span>
-                    </button>
-                </div>
-
-                <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
-                    <span class="text-xl">🏠</span><span class="sidebar-text">Dashboard</span>
+            <!-- Sidebar Content (Scrollable) -->
+            <div class="sidebar-content">
+                <a href="{{ url_for('dashboard') }}">
+                    <span class="text-xl">🏠</span>
+                    <span class="sidebar-text">Dashboard</span>
                 </a>
-                <a href="{{ url_for('schedule') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
-                    <span class="text-xl">📅</span><span class="sidebar-text">Jadwal</span>
+                <a href="{{ url_for('schedule') }}">
+                    <span class="text-xl">📅</span>
+                    <span class="sidebar-text">Jadwal</span>
                 </a>
 
                 {% if loggedin %}
                     <div class="border-t border-purple-500 dark:border-gray-700 my-3"></div>
                     <div class="text-xs text-purple-200 dark:text-gray-400 px-3 mb-2 font-bold sidebar-text uppercase">User Menu</div>
-                    <a href="{{ url_for('my_reservations') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
-                        <span class="text-xl">📂</span><span class="sidebar-text">Reservasi Saya</span>
+                    <a href="{{ url_for('my_reservations') }}">
+                        <span class="text-xl">📂</span>
+                        <span class="sidebar-text">Reservasi Saya</span>
                     </a>
-                    <a href="{{ url_for('reservation') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
-                        <span class="text-xl">➕</span><span class="sidebar-text">Buat Reservasi</span>
+                    <a href="{{ url_for('reservation') }}">
+                        <span class="text-xl">➕</span>
+                        <span class="sidebar-text">Buat Reservasi</span>
                     </a>
 
                     {% if role == 'admin' %}
                         <div class="border-t border-purple-500 dark:border-gray-700 my-3"></div>
                         <div class="text-xs text-purple-200 dark:text-gray-400 px-3 mb-2 font-bold sidebar-text uppercase">Admin Menu</div>
-                        <a href="{{ url_for('user') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
-                            <span class="text-xl">👤</span><span class="sidebar-text">User</span>
+                        <a href="{{ url_for('manage_reservations') }}">
+                            <span class="text-xl">📩</span>
+                            <span class="sidebar-text">Konfirmasi</span>
                         </a>
-                        <a href="{{ url_for('manage_reservations') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
-                            <span class="text-xl">📩</span><span class="sidebar-text">Konfirmasi</span>
+                        <a href="{{ url_for('user') }}">
+                            <span class="text-xl">👤</span>
+                            <span class="sidebar-text">User</span>
                         </a>
-                        <a href="{{ url_for('add_user') }}" class="flex items-center gap-3 p-3 mb-2 rounded hover:bg-purple-600 dark:hover:bg-gray-800 transition">
-                            <span class="text-xl">👥</span><span class="sidebar-text">Tambah User</span>
+                        <a href="{{ url_for('add_user') }}">
+                            <span class="text-xl">👥</span>
+                            <span class="sidebar-text">Tambah User</span>
                         </a>
                     {% endif %}
                 {% endif %}
             </div>
 
-            {% if loggedin %}
-               <div class="p-4 border-t border-purple-600 dark:border-gray-700 bg-purple-700 dark:bg-gray-900">
-                   <a href="{{ url_for('logout') }}" class="flex items-center gap-3 p-3 rounded text-red-200 hover:text-white hover:bg-red-600 transition group">
-                       <span class="text-xl group-hover:scale-110 transition-transform">🚪</span>
-                       <span class="sidebar-text font-bold">Keluar</span>
-                   </a>
-               </div>
+            <!-- Logout di Sidebar (untuk USER) -->
+            {% if loggedin and role != 'admin' %}
+                <div class="sidebar-footer">
+                    <a href="{{ url_for('logout') }}">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        </svg>
+                        <span class="sidebar-text font-bold">Keluar</span>
+                    </a>
+                </div>
             {% endif %}
         </div>
 
+        <!-- ===== RIGHT SIDE (NAVBAR + CONTENT + FOOTER) ===== -->
         <div id="rightSide">
-            <nav id="navbar" class="bg-purple-500 dark:bg-gray-800 text-white p-4 shadow-lg sticky top-0 z-20 border-b dark:border-gray-700">
-                <div class="flex justify-between items-center px-4">
-                    <div class="flex items-center gap-3">
-                        <div class="bg-white dark:bg-gray-700 p-2 rounded-lg">
-                            <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"></path></svg>
+            <!-- ===== NAVBAR ===== -->
+            <nav class="navbar">
+                <div class="navbar-container">
+                    <!-- Logo Gedung Pencakar Langit -->
+                    <div class="navbar-logo">
+                        <div class="logo-container">
+                            <svg class="logo-icon skyscraper-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <!-- Gedung 1 (kiri) - Pencakar Langit -->
+                                <rect x="3" y="5" width="5" height="16" class="skyscraper-building" stroke="currentColor" stroke-width="1.5"/>
+                                <!-- Jendela Gedung 1 -->
+                                <rect x="4" y="8" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="6" y="8" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="4" y="11" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="6" y="11" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="4" y="14" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="6" y="14" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="4" y="17" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="6" y="17" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+
+                                <!-- Gedung 2 (tengah) - Lebih Tinggi -->
+                                <rect x="9" y="3" width="5" height="18" class="skyscraper-building" stroke="currentColor" stroke-width="1.5"/>
+                                <!-- Jendela Gedung 2 -->
+                                <rect x="10" y="6" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="12" y="6" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="10" y="9" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="12" y="9" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="10" y="12" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="12" y="12" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="10" y="15" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="12" y="15" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="10" y="18" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="12" y="18" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+
+                                <!-- Gedung 3 (kanan) - Sedang -->
+                                <rect x="15" y="7" width="5" height="14" class="skyscraper-building" stroke="currentColor" stroke-width="1.5"/>
+                                <!-- Jendela Gedung 3 -->
+                                <rect x="16" y="10" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="18" y="10" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="16" y="13" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="18" y="13" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="16" y="16" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+                                <rect x="18" y="16" width="1" height="1.5" class="skyscraper-window" fill="currentColor"/>
+
+                                <!-- Antenna di gedung tertinggi -->
+                                <line x1="11.5" y1="3" x2="11.5" y2="1" class="skyscraper-antenna" stroke="currentColor" stroke-width="1"/>
+                                <circle cx="11.5" cy="0.5" r="0.5" class="skyscraper-window" fill="currentColor"/>
+                            </svg>
                         </div>
-                        <div class="hidden sm:block text-xl font-bold">My Dashboard</div>
+                        <span>My Dashboard</span>
                     </div>
 
-                    <div class="flex items-center gap-4">
+                    <!-- Right Menu -->
+                    <div class="navbar-right">
                         {% if loggedin %}
-                            <span class="hidden md:inline-block px-3 py-1 bg-purple-600 dark:bg-gray-700 rounded-full text-xs font-bold border dark:border-gray-600 uppercase">
+                            <span class="navbar-user-info">
                                 {{ role }} | {{ username }}
                             </span>
+
+                            <!-- Tombol Laporan dengan warna ungu -->
+                            {% if role == 'admin' %}
+                                <button onclick="toggleReportModal()" class="report-button group">
+                                    <svg fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span class="tooltip">📋 Cetak Laporan</span>
+                                </button>
+                            {% endif %}
                         {% else %}
-                            <button onclick="toggleLoginModal()" class="bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-600 px-4 py-1.5 rounded font-bold shadow transition text-sm">
+                            <button onclick="toggleLoginModal()" class="login-button">
                                 Login
                             </button>
                         {% endif %}
 
-                        <span id="clock" class="font-bold text-sm">00:00:00</span>
+                        <!-- Jam Digital -->
+                        <span id="clock" class="clock">00:00:00</span>
 
-                        <button onclick="toggleDarkMode()" class="bg-purple-600 dark:bg-gray-700 hover:bg-purple-700 dark:hover:bg-gray-600 p-2 rounded-lg transition border dark:border-gray-600">
-                            <svg id="darkModeIcon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                        <!-- Dark Mode Toggle -->
+                        <button onclick="toggleDarkMode()" class="dark-mode-toggle">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                            </svg>
                         </button>
 
+                        <!-- Logout di Navbar untuk ADMIN -->
                         {% if loggedin and role == 'admin' %}
-                        <a href="{{ url_for('logout') }}" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition font-bold text-xs flex items-center gap-2">
-                            <span>🚪</span> Keluar
-                        </a>
+                            <a href="{{ url_for('logout') }}" class="navbar-logout group">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                                </svg>
+                                <span class="tooltip">Keluar</span>
+                            </a>
                         {% endif %}
                     </div>
                 </div>
             </nav>
 
+            <!-- ===== MAIN CONTENT ===== -->
             <div id="mainContent">
                 {% block content %}{% endblock %}
             </div>
 
+            <!-- ===== FOOTER ===== -->
             <footer class="bg-gray-800 dark:bg-black text-white p-6 border-t dark:border-gray-800 text-center">
                 <p>&copy; 2024 My Dashboard. Hak cipta dilindungi.</p>
             </footer>
         </div>
     </div>
 
-    <div id="loginModal" class="hidden fixed inset-0 z-[100] overflow-y-auto">
-        <div class="fixed inset-0 bg-black bg-opacity-50" onclick="toggleLoginModal()"></div>
-        <div class="flex items-center justify-center min-h-screen p-4">
-            <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full overflow-hidden">
-                <div class="bg-purple-600 p-4 flex justify-between items-center text-white font-bold">
-                    <span>🔐 Login System</span>
-                    <button onclick="toggleLoginModal()">✕</button>
+    <!-- ===== MODAL LOGIN ===== -->
+    <div id="loginModalContainer" class="modal-container">
+        <div id="loginModal" class="hidden modal-content">
+            <div class="login-modal-content relative">
+                <button onclick="toggleLoginModal()" class="login-close-btn">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+
+                <div class="login-header">
+                    <div class="login-avatar">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                        </svg>
+                    </div>
+                    <h3>Selamat Datang!</h3>
+                    <p>Silakan login untuk melanjutkan</p>
                 </div>
-                <form action="{{ url_for('login') }}" method="POST" class="p-6">
-                    <div class="mb-4 text-left">
-                        <label class="block text-sm font-bold mb-2">Username</label>
-                        <input type="text" name="username" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" required>
-                    </div>
-                    <div class="mb-6 text-left">
-                        <label class="block text-sm font-bold mb-2">Password</label>
-                        <input type="password" name="password" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" required>
-                    </div>
-                    <button type="submit" class="w-full bg-purple-600 text-white font-bold py-2 rounded">Masuk</button>
-                </form>
+
+                <div class="login-body">
+                    <form id="loginForm" onsubmit="handleLogin(event)">
+                        <div class="login-input-group">
+                            <i>
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                </svg>
+                            </i>
+                            <input type="text" name="username" placeholder="Username" required>
+                        </div>
+
+                        <div class="login-input-group">
+                            <i>
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                </svg>
+                            </i>
+                            <input type="password" name="password" placeholder="Password" required>
+                        </div>
+
+                        <!-- Tempat untuk pesan error akan muncul di sini via JavaScript -->
+                        <div id="loginErrorContainer"></div>
+
+                        <button type="submit" class="login-btn">
+                            Masuk ke Dashboard
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
-        let sidebarCollapsed = false;
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const sidebarTexts = document.querySelectorAll('.sidebar-text');
-            if (!sidebarCollapsed) {
-                sidebarTexts.forEach(t => t.style.display = 'none');
-                sidebar.style.width = '80px';
-            } else {
-                sidebar.style.width = '256px';
-                setTimeout(() => { sidebarTexts.forEach(t => t.style.display = 'inline'); }, 200);
-            }
-            sidebarCollapsed = !sidebarCollapsed;
-        }
+    <!-- ===== MODAL LAPORAN ===== -->
+    <div id="reportModalContainer" class="modal-container">
+        <div id="reportModal" class="hidden modal-content">
+            <div class="report-modal-content">
+                <div class="report-header">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3>Cetak Laporan</h3>
+                </div>
 
-        function toggleLoginModal() { document.getElementById('loginModal').classList.toggle('hidden'); }
-        function updateClock() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('id-ID', { hour12: false }); }
-        setInterval(updateClock, 1000); updateClock();
+                <div class="report-body">
+                    <form action="{{ url_for('print_report') }}" method="GET" target="_blank">
+                        <!-- Pilih Tipe Laporan -->
+                        <div class="mb-4">
+                            <label class="block text-xs font-bold mb-2 text-gray-700 dark:text-gray-300">Pilih Jenis Laporan</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="report-option-card selected" data-type="visitor">
+                                    <span class="report-option-icon">👥</span>
+                                    <span class="report-option-title">Pengunjung</span>
+                                </div>
+                                <div class="report-option-card" data-type="reservation">
+                                    <span class="report-option-icon">📅</span>
+                                    <span class="report-option-title">Reservasi</span>
+                                </div>
+                            </div>
+                            <input type="radio" name="type" value="visitor" class="hidden" checked>
+                            <input type="radio" name="type" value="reservation" class="hidden">
+                        </div>
 
-        function toggleDarkMode() {
-            document.documentElement.classList.toggle('dark');
-            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-        }
-        if (localStorage.theme === 'dark') document.documentElement.classList.add('dark');
+                        <!-- Periode Tanggal -->
+                        <div class="mb-4">
+                            <label class="block text-xs font-bold mb-2 text-gray-700 dark:text-gray-300">Periode Laporan</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <span class="text-[10px] text-gray-500 dark:text-gray-400">Dari</span>
+                                    <input type="date" name="start_date" class="w-full p-1.5 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white text-xs">
+                                </div>
+                                <div>
+                                    <span class="text-[10px] text-gray-500 dark:text-gray-400">Sampai</span>
+                                    <input type="date" name="end_date" class="w-full p-1.5 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white text-xs">
+                                </div>
+                            </div>
+                        </div>
 
-        // FUNGSI AUTO REFRESH STATISTIK (Hanya mengambil data hari ini)
-        function refreshStats() {
-            fetch('/api/stats')
-                .then(response => response.json())
-                .then(data => {
-                    const m = document.getElementById('display-masuk');
-                    const k = document.getElementById('display-keluar');
-                    const t = document.getElementById('display-total');
+                        <!-- Opsi Cepat -->
+                        <div class="mb-4">
+                            <label class="block text-[10px] font-bold mb-2 text-gray-600 dark:text-gray-400 uppercase">Pilih Cepat</label>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button type="button" onclick="setQuickRange('today')" class="quick-range-btn">Hari Ini</button>
+                                <button type="button" onclick="setQuickRange('yesterday')" class="quick-range-btn">Kemarin</button>
+                                <button type="button" onclick="setQuickRange('thisweek')" class="quick-range-btn">Minggu Ini</button>
+                                <button type="button" onclick="setQuickRange('lastweek')" class="quick-range-btn">Minggu Lalu</button>
+                                <button type="button" onclick="setQuickRange('thismonth')" class="quick-range-btn">Bulan Ini</button>
+                                <button type="button" onclick="setQuickRange('lastmonth')" class="quick-range-btn">Bulan Lalu</button>
+                            </div>
+                        </div>
 
-                    if(m) m.innerText = data.masuk;
-                    if(k) k.innerText = data.keluar;
-                    if(t) t.innerText = data.total;
-                })
-                .catch(error => console.error('Gagal mengambil data IoT:', error));
-        }
+                        <!-- Tombol Aksi -->
+                        <div class="flex gap-2">
+                            <button type="submit" class="print-button flex-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H7a2 2 0 00-2 2v4h12z"></path>
+                                </svg>
+                                Cetak
+                            </button>
+                            <button type="button" onclick="toggleReportModal()" class="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg transition text-xs">
+                                Batal
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        // Interval 1 detik untuk update statistik pengunjung
-        setInterval(refreshStats, 1000);
-    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

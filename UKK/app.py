@@ -1,6 +1,6 @@
 from flask import Flask, render_template, redirect, url_for, session, flash, request, jsonify
 import sqlite3
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 app = Flask(__name__)
 app.secret_key = 'rahasia'
@@ -128,12 +128,26 @@ def login():
             session['id'] = user['id']
             session['username'] = user['username']
             session['role'] = user['role']
-            flash('Login berhasil!', 'success')
-            return redirect(url_for('dashboard'))
+
+            # Untuk AJAX request, kirim response JSON
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': True,
+                    'redirect': url_for('dashboard')
+                })
+            else:
+                flash('Login berhasil!', 'success')
+                return redirect(url_for('dashboard'))
         else:
-            # JIKA GAGAL (Username/Password Salah)
-            flash('Username atau Password salah!', 'danger')
-            return redirect(url_for('dashboard'))
+            # JIKA GAGAL
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'message': 'Username atau password salah!'
+                }), 401
+            else:
+                flash('Username atau Password salah!', 'danger')
+                return redirect(url_for('dashboard'))
 
     # Jika user mencoba akses /login lewat URL langsung, lempar ke dashboard saja
     return redirect(url_for('dashboard'))
@@ -146,7 +160,6 @@ def logout():
     return redirect(url_for('dashboard'))
 
 
-# --- DASHBOARD (Statistik IoT & Status User) ---
 @app.route('/dashboard')
 def dashboard():
     # 1. Update status jadwal dulu biar real-time
@@ -162,22 +175,14 @@ def dashboard():
                                 (today_str,)).fetchone()[0]
     total_today = masuk_today + keluar_today
 
-    # 3. Ambil Data Reservasi
-    my_reservations = []
-    todays_schedule = []
-
-    if session.get('loggedin'):
-        # A. Jika Login: Ambil reservasi milik user tersebut (Status apapun)
-        user_id = session['id']
-        my_reservations = conn.execute('SELECT * FROM reservations WHERE user_id = ? ORDER BY id DESC LIMIT 5',
-                                       (user_id,)).fetchall()
-    else:
-        # B. Jika TIDAK Login: Ambil Jadwal HARI INI yang disetujui (Untuk Info Publik)
-        todays_schedule = conn.execute('''
-            SELECT * FROM reservations 
-            WHERE reservation_date = ? AND status IN ('Aktif', 'Terjadwal', 'Selesai')
-            ORDER BY start_time ASC
-        ''', (today_str,)).fetchall()
+    # 3. AMBIL JADWAL HARI INI UNTUK SEMUA USER (TIDAK TERGANTUNG LOGIN)
+    #    Tampilkan semua jadwal yang sudah disetujui (Aktif, Terjadwal, Selesai)
+    todays_schedule = conn.execute('''
+        SELECT * FROM reservations 
+        WHERE reservation_date = ? 
+        AND status IN ('Aktif', 'Terjadwal', 'Selesai')
+        ORDER BY start_time ASC
+    ''', (today_str,)).fetchall()
 
     conn.close()
 
@@ -188,8 +193,7 @@ def dashboard():
                            total_today=total_today,
                            masuk_today=masuk_today,
                            keluar_today=keluar_today,
-                           my_reservations=my_reservations,
-                           todays_schedule=todays_schedule) # <-- Variabel Baru
+                           todays_schedule=todays_schedule)  # HANYA todays_schedule, TIDAK ADA my_reservations
 
 
 # --- HALAMAN RESERVASI SAYA (FULL LIST) ---
@@ -199,10 +203,12 @@ def my_reservations():
         flash('Silahkan login terlebih dahulu.', 'warning')
         return redirect(url_for('dashboard'))
 
-    user_id = session['id']
+    user_id = session['id']  # AMBIL ID USER YANG SEDANG LOGIN
+    username = session['username']  # AMBIL USERNAME YANG SEDANG LOGIN
+
     conn = get_db_connection()
 
-    # Mengambil semua reservasi milik user yang sedang login
+    # Mengambil SEMUA reservasi milik user yang sedang login (BERDASARKAN USER_ID)
     my_full_list = conn.execute('''
         SELECT * FROM reservations 
         WHERE user_id = ? 
@@ -216,7 +222,7 @@ def my_reservations():
                            loggedin=True,
                            role=session.get('role'),
                            now_date=date.today().strftime('%Y-%m-%d'),
-                           username=session.get('username'))
+                           username=username)  # Kirim username ke template
 
 # --- SCHEDULE (Jadwal Publik) ---
 @app.route('/schedule')
@@ -477,6 +483,169 @@ def test_iot(direction):
         flash(f'Simulasi sensor: Orang {direction} berhasil ditambahkan!', 'info')
     return redirect(url_for('dashboard'))
 
+
+# --- API UNTUK DATA HISTORIS PENGUNJUNG (7 hari terakhir) ---
+@app.route('/api/historical_stats')
+def get_historical_stats():
+    conn = get_db_connection()
+
+    # Ambil data 7 hari terakhir
+    historical_data = []
+    labels = []
+
+    for i in range(6, -1, -1):  # Dari 6 hari lalu sampai hari ini
+        date_obj = date.today() - timedelta(days=i)
+        date_str = date_obj.strftime('%Y-%m-%d')
+
+        # Nama hari dalam Bahasa Indonesia
+        day_names = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
+        day_index = date_obj.weekday()  # 0=Senin, 1=Selasa, ..., 6=Minggu
+        day_name = day_names[day_index]
+
+        masuk = conn.execute(
+            "SELECT COUNT(*) FROM visitor_logs WHERE direction='in' AND date(timestamp) = ?",
+            (date_str,)
+        ).fetchone()[0]
+
+        keluar = conn.execute(
+            "SELECT COUNT(*) FROM visitor_logs WHERE direction='out' AND date(timestamp) = ?",
+            (date_str,)
+        ).fetchone()[0]
+
+        total = masuk + keluar
+
+        historical_data.append({
+            'date': date_str,
+            'day': day_name,
+            'day_index': day_index,
+            'masuk': masuk,
+            'keluar': keluar,
+            'total': total
+        })
+
+        # Format label: Sen 26/12
+        labels.append(f"{day_name}\n{date_str[8:10]}/{date_str[5:7]}")
+
+    conn.close()
+
+    return jsonify({
+        'labels': labels,
+        'data': historical_data
+    })
+
+
+# --- ROUTE UNTUK CETAK LAPORAN (LANGSUNG KE HALAMAN CETAK) ---
+@app.route('/print_report')
+def print_report():
+    if not session.get('loggedin') or session.get('role') != 'admin':
+        return redirect(url_for('dashboard'))
+
+    report_type = request.args.get('type', 'visitor')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    # Validasi tanggal
+    if not start_date or not end_date:
+        flash('Pilih periode laporan terlebih dahulu!', 'warning')
+        return redirect(url_for('dashboard'))
+
+    conn = get_db_connection()
+
+    if report_type == 'visitor':
+        # Ambil data pengunjung
+        daily_data = []
+        summary = {'masuk': 0, 'keluar': 0, 'total': 0}
+
+        current = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+        while current <= end:
+            date_str = current.strftime('%Y-%m-%d')
+            day_name = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'][current.weekday()]
+
+            masuk = conn.execute(
+                "SELECT COUNT(*) FROM visitor_logs WHERE direction='in' AND date(timestamp) = ?",
+                (date_str,)).fetchone()[0]
+            keluar = conn.execute(
+                "SELECT COUNT(*) FROM visitor_logs WHERE direction='out' AND date(timestamp) = ?",
+                (date_str,)).fetchone()[0]
+            total = masuk + keluar
+
+            # Tetap tampilkan meskipun 0 agar laporan lengkap
+            daily_data.append({
+                'date': date_str,
+                'day': day_name,
+                'masuk': masuk,
+                'keluar': keluar,
+                'total': total
+            })
+
+            summary['masuk'] += masuk
+            summary['keluar'] += keluar
+            summary['total'] += total
+
+            current += timedelta(days=1)
+
+        conn.close()
+
+        return render_template('print_report.html',
+                               report_type='Pengunjung',
+                               start_date=start_date,
+                               end_date=end_date,
+                               daily_data=daily_data,
+                               summary=summary,
+                               username=session.get('username'),
+                               now=datetime.now)
+
+    else:  # report_type == 'reservation'
+        # Ambil data reservasi
+        reservation_data = conn.execute('''
+            SELECT r.*, u.username as requester
+            FROM reservations r
+            JOIN users u ON r.user_id = u.id
+            WHERE date(r.reservation_date) >= ? AND date(r.reservation_date) <= ?
+            AND r.status NOT IN ('Menunggu', 'Ditolak')
+            ORDER BY r.reservation_date ASC, r.start_time ASC
+        ''', (start_date, end_date)).fetchall()
+
+        summary = {
+            'total': len(reservation_data),
+            'terjadwal': 0,
+            'aktif': 0,
+            'selesai': 0
+        }
+
+        formatted_data = []
+        for res in reservation_data:
+            # Hitung summary
+            if res['status'] == 'Terjadwal':
+                summary['terjadwal'] += 1
+            elif res['status'] == 'Aktif':
+                summary['aktif'] += 1
+            elif res['status'] == 'Selesai':
+                summary['selesai'] += 1
+
+            # Format untuk template
+            formatted_data.append({
+                'date': res['reservation_date'],
+                'start_time': res['start_time'],
+                'end_time': res['end_time'],
+                'description': res['description'],
+                'pic_name': res['pic_name'],
+                'status': res['status'],
+                'requester': res['requester']
+            })
+
+        conn.close()
+
+        return render_template('print_report.html',
+                               report_type='Reservasi',
+                               start_date=start_date,
+                               end_date=end_date,
+                               reservation_data=formatted_data,
+                               summary=summary,
+                               username=session.get('username'),
+                               now=datetime.now)
 
 if __name__ == '__main__':
     init_db()
