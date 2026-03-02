@@ -6,6 +6,19 @@ let autoHideErrorTimeout = null;
 let refreshInterval = null;
 let clockInterval = null;
 
+// Variabel untuk melacak status penutupan banner anomali
+let anomalyDismissed = false;
+let currentAnomalyLevel = 0;
+
+// Fungsi untuk menutup banner anomali secara manual
+function tutupBannerAnomali() {
+    const bAnomaly = document.getElementById('banner-anomaly');
+    if (bAnomaly) {
+        bAnomaly.classList.add('hidden');
+    }
+    anomalyDismissed = true; // Tandai bahwa user sudah menutupnya
+}
+
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM Content Loaded - Initializing...');
@@ -175,9 +188,11 @@ function toggleLoginModal() {
             document.body.style.position = '';
             document.body.style.width = '';
             document.body.style.height = '';
+
             // Reset form jika modal ditutup
             const form = document.getElementById('loginForm');
             if (form) form.reset();
+
             // Hapus pesan error jika ada
             removeLoginError();
         }
@@ -512,35 +527,6 @@ function updateChartColors() {
     historicalChart.update();
 }
 
-// ==================== STATISTICS FUNCTIONS ====================
-function refreshStats() {
-    fetch('/api/stats')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            const m = document.getElementById('display-masuk');
-            const k = document.getElementById('display-keluar');
-            const t = document.getElementById('display-total');
-            const dalamRuangan = document.getElementById('dalam-ruangan');
-
-            if(m) m.innerText = data.masuk;
-            if(k) k.innerText = data.keluar;
-            if(t) t.innerText = data.total;
-            if(dalamRuangan) dalamRuangan.innerText = data.masuk - data.keluar;
-
-            const todayMasuk = document.getElementById('today-masuk');
-            const todayKeluar = document.getElementById('today-keluar');
-
-            if(todayMasuk) todayMasuk.textContent = data.masuk;
-            if(todayKeluar) todayKeluar.textContent = data.keluar;
-        })
-        .catch(error => console.error('Gagal mengambil data IoT:', error));
-}
-
 // ==================== HISTORICAL CHART FUNCTIONS ====================
 async function loadHistoricalData() {
     try {
@@ -745,6 +731,81 @@ function updateDailyData(data) {
     dailyTotalContainer.innerHTML = totalHtml;
 }
 
+// ==================== KONTROL ALARM IOT ====================
+function matikanAlarm() {
+    if (confirm("Apakah Anda yakin situasi sudah aman dan ingin mematikan alarm kebakaran?")) {
+        fetch('/api/stop_alarm', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    refreshStats();
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(err => console.error("Gagal mematikan alarm:", err));
+    }
+}
+
+// ==================== UPDATE REFRESH STATS ====================
+function refreshStats() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            // Update Angka di Card
+            const m = document.getElementById('display-masuk');
+            const k = document.getElementById('display-keluar');
+            const t = document.getElementById('display-total');
+
+            if(m) m.innerText = data.masuk;
+            if(k) k.innerText = data.keluar;
+            if(t) t.innerText = data.total;
+
+            const bEmergency = document.getElementById('banner-emergency');
+            const bAnomaly = document.getElementById('banner-anomaly');
+            const bFull = document.getElementById('banner-full');
+
+            if(bEmergency) {
+                if(data.emergency) {
+                    bEmergency.classList.remove('hidden');
+                    const msgEl = document.getElementById('emergency-message');
+                    if(msgEl) msgEl.innerText = data.emergency_message || 'Terdeteksi Titik Api / Kebakaran!';
+                } else {
+                    bEmergency.classList.add('hidden');
+                }
+            }
+
+            // --- LOGIKA CERDAS BANNER ANOMALI ---
+            if(bAnomaly) {
+                if(data.is_anomaly) {
+                    // Jika tingkat anomali (minusnya) bertambah, tampilkan lagi bannernya
+                    if (data.anomaly_level > currentAnomalyLevel) {
+                        bAnomaly.classList.remove('hidden');
+                        anomalyDismissed = false;
+                        currentAnomalyLevel = data.anomaly_level;
+                    }
+                    // Jika belum di-close secara manual oleh user, biarkan tampil
+                    else if (!anomalyDismissed) {
+                        bAnomaly.classList.remove('hidden');
+                    }
+                } else {
+                    // Jika keadaan seimbang (tidak minus), sembunyikan & reset status
+                    bAnomaly.classList.add('hidden');
+                    anomalyDismissed = false;
+                    currentAnomalyLevel = 0;
+                }
+            }
+
+            if(bFull) {
+                if(data.is_full) bFull.classList.remove('hidden');
+                else bFull.classList.add('hidden');
+            }
+        })
+        .catch(error => console.error('Gagal mengambil data:', error));
+}
+
+
 // ==================== CONFIRMATION FUNCTIONS ====================
 function promptReason(form) {
     let reason = prompt("Masukkan alasan penolakan:", "Jadwal bentrok");
@@ -841,6 +902,7 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
+
 // ==================== EXPORT FUNCTIONS TO GLOBAL SCOPE ====================
 window.toggleSidebar = toggleSidebar;
 window.toggleLoginModal = toggleLoginModal;
@@ -855,3 +917,5 @@ window.closeAllModals = closeAllModals;
 window.loadHistoricalData = loadHistoricalData;
 window.refreshStats = refreshStats;
 window.showToast = showToast;
+window.matikanAlarm = matikanAlarm;
+window.tutupBannerAnomali = tutupBannerAnomali;

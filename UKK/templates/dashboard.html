@@ -5,9 +5,45 @@
 {% block content %}
 <h2 class="text-3xl font-bold mb-6 text-gray-800 dark:text-white">Dashboard Hari Ini</h2>
 
-<!-- Card Statistik - 3 Card Utama -->
+{% if loggedin %}
+    <div id="banner-emergency" class="bg-red-600 text-white p-6 rounded-lg shadow-lg mb-6 animate-pulse border-4 border-red-800 hidden">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-2xl font-bold flex items-center gap-3 mb-2">
+                    ⚠️ ALARM DARURAT AKTIF!
+                </h3>
+                <p class="text-lg" id="emergency-message">Sistem mendeteksi titik api / kebakaran.</p>
+            </div>
+            <button onclick="matikanAlarm()" class="bg-white text-red-700 hover:bg-gray-200 font-extrabold py-3 px-6 rounded-lg shadow-lg transition flex items-center gap-2">
+                🔕 MATIKAN ALARM
+            </button>
+        </div>
+    </div>
+
+    <div id="banner-anomaly" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md mb-6 hidden relative pr-12">
+        <div class="flex items-center gap-3">
+            <span class="text-2xl">⚠️</span>
+            <div>
+                <h3 class="font-bold">Peringatan Anomali Sensor</h3>
+                <p class="text-sm">Terdeteksi objek keluar saat ruangan kosong. Harap cek sensor.</p>
+            </div>
+        </div>
+        <button onclick="tutupBannerAnomali()" class="absolute top-1/2 -translate-y-1/2 right-4 text-yellow-600 hover:text-yellow-800 bg-yellow-200 hover:bg-yellow-300 rounded-full p-1 transition cursor-pointer" title="Tutup peringatan">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
+
+    <div id="banner-full" class="bg-orange-500 text-white p-4 rounded-lg shadow-md mb-6 border-4 border-orange-700 animate-pulse hidden">
+        <div class="flex items-center gap-3">
+            <h3 class="font-bold text-xl">PERHATIAN: RUANGAN PENUH!</h3>
+            <p class="text-sm">Kapasitas mencapai batas maksimal (<span id="max-kapasitas-text">{{ max_kapasitas }}</span> orang).</p>
+        </div>
+    </div>
+{% endif %}
+
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <!-- Card Total Masuk -->
     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-l-4 border-green-500">
         <div class="flex items-center justify-between">
             <div>
@@ -22,7 +58,6 @@
         </div>
     </div>
 
-    <!-- Card Total Keluar -->
     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-l-4 border-red-500">
         <div class="flex items-center justify-between">
             <div>
@@ -37,12 +72,11 @@
         </div>
     </div>
 
-    <!-- Card Dalam Ruangan -->
     <div class="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg shadow border-l-4 border-blue-600">
         <div class="flex items-center justify-between">
             <div>
                 <p class="text-blue-800 dark:text-blue-400 text-xs font-bold uppercase">Dalam Ruangan</p>
-                <p id="display-total" class="text-4xl font-extrabold text-blue-700 dark:text-blue-500 mt-1">{{ masuk_today - keluar_today }}</p>
+                <p id="display-total" class="text-4xl font-extrabold text-blue-700 dark:text-blue-500 mt-1">{{ total_today }}</p>
                 <p class="text-[10px] text-blue-500 animate-pulse">● Live Counter</p>
             </div>
             <div class="bg-blue-200 dark:bg-blue-800/50 p-3 rounded-full animate-pulse">
@@ -54,7 +88,6 @@
     </div>
 </div>
 
-<!-- Diagram Traffic 7 Hari Terakhir - HANYA TAMPIL JIKA LOGIN -->
 {% if loggedin %}
 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
@@ -69,7 +102,6 @@
         <canvas id="historicalChart"></canvas>
     </div>
 
-    <!-- Label Hari -->
     <div class="mt-6 grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-600 dark:text-gray-400">
         <div class="bg-gray-50 dark:bg-gray-900/50 py-2 rounded">Sen</div>
         <div class="bg-gray-50 dark:bg-gray-900/50 py-2 rounded">Sel</div>
@@ -80,11 +112,9 @@
         <div class="bg-gray-50 dark:bg-gray-900/50 py-2 rounded">Min</div>
     </div>
 
-    <!-- Data Per Hari -->
     <div id="daily-data" class="mt-2 grid grid-cols-7 gap-1 text-center text-xs"></div>
     <div id="daily-total" class="mt-2 grid grid-cols-7 gap-1 text-center text-xs font-bold"></div>
 
-    <!-- Keterangan Warna -->
     <div class="mt-6 flex flex-wrap justify-center gap-4 text-sm text-gray-600 dark:text-gray-400">
         <span class="flex items-center"><span class="w-4 h-4 bg-green-500 rounded-full mr-2"></span> Masuk</span>
         <span class="flex items-center"><span class="w-4 h-4 bg-red-500 rounded-full mr-2"></span> Keluar</span>
@@ -93,7 +123,6 @@
 </div>
 {% endif %}
 
-<!-- JADWAL RUANGAN HARI INI - TAMPIL UNTUK SEMUA USER -->
 <div class="mb-8">
     <div class="flex justify-between items-center mb-4">
         <h3 class="text-xl font-bold text-gray-800 dark:text-white">📅 Jadwal Ruangan Hari Ini</h3>

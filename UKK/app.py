@@ -1,26 +1,54 @@
 from flask import Flask, render_template, redirect, url_for, session, flash, request, jsonify
 import sqlite3
 from datetime import datetime, date, timedelta
+import urllib.request
+import urllib.parse
+import threading
+import time
 
 app = Flask(__name__)
 app.secret_key = 'rahasia'
 
 DB_NAME = 'db_ukk.db'
+MAX_KAPASITAS = 10
+
+# ======================================================
+# KONFIGURASI TELEGRAM BOT (UNTUK NOTIFIKASI DARURAT)
+# ======================================================
+TELEGRAM_BOT_TOKEN = '8544862664:AAHyrx5xykMcflV16BiQJvHN0gEQ3EEM6g8'
+TELEGRAM_CHAT_ID = '7514843536'
+DELAY_PESAN_DARURAT = 30  # Jeda pengiriman pesan berulang (dalam detik)
+
+# ======================================================
+# KONFIGURASI ALAMAT & LOKASI GEDUNG (SHARELOC TELEGRAM)
+# ======================================================
+ALAMAT_LENGKAP = "Gedung SMK (Nama Sekolah), Kec. Sooko, Kabupaten Mojokerto, Jawa Timur"
+GEDUNG_LATITUDE = -7.551389
+GEDUNG_LONGITUDE = 112.480417
+
+# --- GLOBAL STATE UNTUK KONTROL ALARM IOT ---
+system_state = {
+    'emergency_active': False,
+    'emergency_message': '',
+    'esp32_ip': None,
+    'evacuation_notified': False,
+    'location_sent': False,
+    'thread_running': False
+}
 
 
 # --- KONEKSI DATABASE ---
 def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-# --- INISIALISASI DATABASE (JALAN PERTAMA KALI) ---
+# --- INISIALISASI DATABASE ---
 def init_db():
     conn = get_db_connection()
     c = conn.cursor()
 
-    # 1. Tabel Users
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,9 +59,6 @@ def init_db():
         )
     ''')
 
-    # 2. Tabel Reservations (UPDATE STRUKTUR)
-    # - Status Default: 'Menunggu' (Agar masuk inbox admin dulu)
-    # - rejection_reason: Untuk menyimpan alasan penolakan
     c.execute('''
         CREATE TABLE IF NOT EXISTS reservations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +74,6 @@ def init_db():
         )
     ''')
 
-    # 3. Tabel Log IoT (Sensor Masuk/Keluar)
     c.execute('''
         CREATE TABLE IF NOT EXISTS visitor_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,20 +82,19 @@ def init_db():
         )
     ''')
 
-    # Buat Akun Operator Default jika belum ada
     c.execute('SELECT * FROM users WHERE username = ?', ('operator',))
     if c.fetchone() is None:
-        print("Membuat akun default: operator / admin123")
         c.execute("INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)",
                   ('operator', 'operator@mail.id', 'admin123', 'admin'))
+
     conn.commit()
     conn.close()
+
 
 # --- HELPER: HITUNG STATUS BERDASARKAN WAKTU ---
 def calculate_status(date_str, start_str, end_str):
     now = datetime.now()
     try:
-        # Gabungkan tanggal dan jam menjadi format waktu lengkap
         start_dt = datetime.strptime(f"{date_str} {start_str}", "%Y-%m-%d %H:%M")
         end_dt = datetime.strptime(f"{date_str} {end_str}", "%Y-%m-%d %H:%M")
 
@@ -88,13 +111,10 @@ def calculate_status(date_str, start_str, end_str):
 # --- HELPER: UPDATE STATUS MASAL ---
 def update_all_reservation_statuses():
     conn = get_db_connection()
-    # PENTING: Hanya update jadwal yang SUDAH DISETUJUI.
-    # Jangan sentuh yang statusnya masih 'Menunggu' atau 'Ditolak'.
     reservations = conn.execute("SELECT * FROM reservations WHERE status NOT IN ('Menunggu', 'Ditolak')").fetchall()
 
     for res in reservations:
         new_status = calculate_status(res['reservation_date'], res['start_time'], res['end_time'])
-        # Jika status perhitungan beda dengan di database, update!
         if res['status'] != new_status:
             conn.execute('UPDATE reservations SET status = ? WHERE id = ?', (new_status, res['id']))
 
@@ -102,8 +122,147 @@ def update_all_reservation_statuses():
     conn.close()
 
 
+# --- FUNGSI KIRIM TELEGRAM TEKS ---
+def send_telegram_message(pesan_teks):
+    """Fungsi mengirim pesan teks ke Telegram"""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        data = urllib.parse.urlencode({
+            'chat_id': TELEGRAM_CHAT_ID,
+            'text': pesan_teks,
+            'parse_mode': 'Markdown'
+        }).encode('utf-8')
+
+        req = urllib.request.Request(url, data=data)
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f">>> Gagal kirim pesan Telegram: {e}")
+
+
+# --- FUNGSI KIRIM TELEGRAM SHARELOC (MAPS) ---
+def send_telegram_location(lat, lon):
+    """Fungsi mengirim Pin Lokasi (ShareLoc) ke Telegram"""
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendLocation"
+        data = urllib.parse.urlencode({
+            'chat_id': TELEGRAM_CHAT_ID,
+            'latitude': lat,
+            'longitude': lon
+        }).encode('utf-8')
+
+        req = urllib.request.Request(url, data=data)
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f">>> Gagal kirim lokasi Telegram: {e}")
+
+
+# --- FUNGSI BACKGROUND: LOOPING DARURAT CERDAS ---
+def emergency_monitor_thread():
+    """Berjalan di background untuk cek kondisi & kirim pesan berulang"""
+    system_state['thread_running'] = True
+    print(">>> Thread Darurat Dimulai!")
+
+    while system_state['emergency_active']:
+
+        # Cek jumlah orang di dalam ruangan secara kronologis
+        conn = get_db_connection()
+        logs = conn.execute(
+            "SELECT direction FROM visitor_logs WHERE date(timestamp) = date('now', 'localtime') ORDER BY timestamp ASC").fetchall()
+        conn.close()
+
+        total_dalam = 0
+        for log in logs:
+            if log['direction'] == 'in':
+                total_dalam += 1
+            else:
+                total_dalam -= 1
+                if total_dalam < 0:
+                    total_dalam = 0
+
+        # 1. JIKA MASIH ADA ORANG DI DALAM
+        if total_dalam > 0:
+            pesan = (
+                "🚨 *LAPORAN DARURAT: KEBAKARAN GEDUNG* 🚨\n\n"
+                "Sistem Sensor IoT mendeteksi adanya *TITIK API AKTIF* di dalam ruangan.\n\n"
+                "🏢 *DETAIL LOKASI:*\n"
+                f"📍 Alamat: _{ALAMAT_LENGKAP}_\n"
+                f"📌 Titik Kordinat Maps terlampir di bawah.\n\n"
+                "⚠️ *STATUS NYAWA (KRITIS):*\n"
+                f"Sistem penghitung mendeteksi masih ada *{total_dalam} JIWA* yang terjebak di dalam area kebakaran.\n\n"
+                "MOHON SEGERA KIRIMKAN UNIT PEMADAM KEBAKARAN DAN TIM EVAKUASI KE LOKASI SEKARANG JUGA!"
+            )
+
+            send_telegram_message(pesan)
+            print(f">>> Telegram: Peringatan {total_dalam} jiwa dikirim.")
+
+            if not system_state['location_sent']:
+                send_telegram_location(GEDUNG_LATITUDE, GEDUNG_LONGITUDE)
+                system_state['location_sent'] = True
+
+            system_state['evacuation_notified'] = False
+
+            # LOOPING JEDA PINTAR: TIDUR TAPI TETAP WASPADA TIAP DETIK
+            for _ in range(DELAY_PESAN_DARURAT):
+                if not system_state['emergency_active']:
+                    break
+
+                # Cek kilat ke database: Apakah detik ini orangnya sudah 0?
+                conn = get_db_connection()
+                cek_logs = conn.execute(
+                    "SELECT direction FROM visitor_logs WHERE date(timestamp) = date('now', 'localtime')").fetchall()
+                conn.close()
+                cek_total = 0
+                for log in cek_logs:
+                    if log['direction'] == 'in':
+                        cek_total += 1
+                    else:
+                        cek_total -= 1
+                        if cek_total < 0: cek_total = 0
+
+                # JIKA ORANG SUDAH 0, POTONG KOMPAS! LANGSUNG KELUAR DARI WAKTU TUNGGU!
+                if cek_total == 0:
+                    break
+
+                time.sleep(1)
+
+        # 2. JIKA ORANG SUDAH 0, TAPI ALARM MASIH BUNYI (API MASIH ADA)
+        else:
+            if not system_state['evacuation_notified']:
+                pesan = (
+                    "📢 *UPDATE STATUS: EVAKUASI SELESAI*\n\n"
+                    "Berdasarkan pantauan sensor pintu otomatis, saat ini *SUDAH TIDAK ADA ORANG (0 Jiwa)* di dalam ruangan.\n"
+                    "Seluruh pengunjung telah berhasil keluar gedung.\n\n"
+                    "🔥 *PERINGATAN:* Sirine alarm masih menyala dan titik api *MASIH AKTIF/BELUM PADAM*. "
+                    "Fokuskan tindakan pada pemadaman aset gedung!"
+                )
+
+                send_telegram_message(pesan)
+
+                if not system_state['location_sent']:
+                    send_telegram_location(GEDUNG_LATITUDE, GEDUNG_LONGITUDE)
+                    system_state['location_sent'] = True
+
+                print(">>> Telegram: Pesan evakuasi 0 Jiwa dikirim.")
+                system_state['evacuation_notified'] = True
+
+            time.sleep(2)  # Cek setiap 2 detik apakah alarm dimatikan
+
+    # ========================================================
+    # KELUAR DARI WHILE LOOP (KARENA ALARM DIMATIKAN VIA WEB)
+    # ========================================================
+    pesan_aman = (
+        "✅ *STATUS DARURAT DICABUT (AMAN)*\n\n"
+        "Sistem kendali pusat telah mematikan sirine alarm kebakaran.\n"
+        "Api dipastikan telah padam dan situasi gedung sudah kembali kondusif.\n\n"
+        "Terima kasih atas respons cepatnya."
+    )
+    send_telegram_message(pesan_aman)
+    print(">>> Telegram: Pesan KONDISI AMAN dikirim. Thread selesai.")
+    system_state['thread_running'] = False
+
+
 # =========================================
-#                 ROUTES
+#                 ROUTES WEB
 # =========================================
 
 @app.route('/')
@@ -123,13 +282,11 @@ def login():
         conn.close()
 
         if user:
-            # JIKA SUKSES
             session['loggedin'] = True
             session['id'] = user['id']
             session['username'] = user['username']
             session['role'] = user['role']
 
-            # Untuk AJAX request, kirim response JSON
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
                     'success': True,
@@ -139,7 +296,6 @@ def login():
                 flash('Login berhasil!', 'success')
                 return redirect(url_for('dashboard'))
         else:
-            # JIKA GAGAL
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({
                     'success': False,
@@ -149,7 +305,6 @@ def login():
                 flash('Username atau Password salah!', 'danger')
                 return redirect(url_for('dashboard'))
 
-    # Jika user mencoba akses /login lewat URL langsung, lempar ke dashboard saja
     return redirect(url_for('dashboard'))
 
 
@@ -160,23 +315,32 @@ def logout():
     return redirect(url_for('dashboard'))
 
 
+# --- DASHBOARD ---
 @app.route('/dashboard')
 def dashboard():
-    # 1. Update status jadwal dulu biar real-time
     update_all_reservation_statuses()
 
     conn = get_db_connection()
     today_str = date.today().strftime('%Y-%m-%d')
 
-    # 2. Hitung Statistik IoT (Pengunjung)
-    masuk_today = conn.execute("SELECT COUNT(*) FROM visitor_logs WHERE direction='in' AND date(timestamp) = ?",
-                               (today_str,)).fetchone()[0]
-    keluar_today = conn.execute("SELECT COUNT(*) FROM visitor_logs WHERE direction='out' AND date(timestamp) = ?",
-                                (today_str,)).fetchone()[0]
-    total_today = masuk_today + keluar_today
+    # LOGIKA KRONOLOGIS UNTUK DASHBOARD
+    logs = conn.execute("SELECT direction FROM visitor_logs WHERE date(timestamp) = ? ORDER BY timestamp ASC",
+                        (today_str,)).fetchall()
 
-    # 3. AMBIL JADWAL HARI INI UNTUK SEMUA USER (TIDAK TERGANTUNG LOGIN)
-    #    Tampilkan semua jadwal yang sudah disetujui (Aktif, Terjadwal, Selesai)
+    masuk_today = 0
+    keluar_today = 0
+    total_today = 0
+
+    for log in logs:
+        if log['direction'] == 'in':
+            masuk_today += 1
+            total_today += 1
+        else:
+            keluar_today += 1
+            total_today -= 1
+            if total_today < 0:
+                total_today = 0
+
     todays_schedule = conn.execute('''
         SELECT * FROM reservations 
         WHERE reservation_date = ? 
@@ -193,7 +357,8 @@ def dashboard():
                            total_today=total_today,
                            masuk_today=masuk_today,
                            keluar_today=keluar_today,
-                           todays_schedule=todays_schedule)  # HANYA todays_schedule, TIDAK ADA my_reservations
+                           max_kapasitas=MAX_KAPASITAS,
+                           todays_schedule=todays_schedule)
 
 
 # --- HALAMAN RESERVASI SAYA (FULL LIST) ---
@@ -203,18 +368,15 @@ def my_reservations():
         flash('Silahkan login terlebih dahulu.', 'warning')
         return redirect(url_for('dashboard'))
 
-    user_id = session['id']  # AMBIL ID USER YANG SEDANG LOGIN
-    username = session['username']  # AMBIL USERNAME YANG SEDANG LOGIN
+    user_id = session['id']
+    username = session['username']
 
     conn = get_db_connection()
-
-    # Mengambil SEMUA reservasi milik user yang sedang login (BERDASARKAN USER_ID)
     my_full_list = conn.execute('''
         SELECT * FROM reservations 
         WHERE user_id = ? 
         ORDER BY reservation_date DESC, start_time DESC
     ''', (user_id,)).fetchall()
-
     conn.close()
 
     return render_template('my_reservations.html',
@@ -222,18 +384,17 @@ def my_reservations():
                            loggedin=True,
                            role=session.get('role'),
                            now_date=date.today().strftime('%Y-%m-%d'),
-                           username=username)  # Kirim username ke template
+                           username=username)
+
 
 # --- SCHEDULE (Jadwal Publik) ---
 @app.route('/schedule')
 def schedule():
-    update_all_reservation_statuses() # Memperbarui status jadwal secara real-time
+    update_all_reservation_statuses()
     conn = get_db_connection()
-    today_str = date.today().strftime('%Y-%m-%d') # Mendapatkan tanggal hari ini
+    today_str = date.today().strftime('%Y-%m-%d')
 
-    # Cek apakah pengguna adalah admin (operator)
     if session.get('loggedin') and session.get('role') == 'admin':
-        # Admin dapat melihat SEMUA riwayat jadwal (termasuk yang sudah lewat)
         query = """
             SELECT * FROM reservations 
             WHERE status NOT IN ('Menunggu', 'Ditolak') 
@@ -241,7 +402,6 @@ def schedule():
         """
         reservations = conn.execute(query).fetchall()
     else:
-        # User/Tamu hanya melihat jadwal hari ini dan seterusnya
         query = """
             SELECT * FROM reservations 
             WHERE status NOT IN ('Menunggu', 'Ditolak') 
@@ -268,7 +428,6 @@ def reservation():
 
     if request.method == 'POST':
         conn = get_db_connection()
-        # INSERT DATA: Status otomatis 'Menunggu'
         conn.execute('''
             INSERT INTO reservations (user_id, pic_name, description, reservation_date, start_time, end_time, status) 
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -287,14 +446,13 @@ def reservation():
                            username=session.get('username'))
 
 
-# --- [BARU] HALAMAN INBOX ADMIN ---
+# --- HALAMAN INBOX ADMIN ---
 @app.route('/manage_reservations')
 def manage_reservations():
     if not session.get('loggedin') or session.get('role') != 'admin':
         return redirect(url_for('dashboard'))
 
     conn = get_db_connection()
-    # Ambil semua data yang statusnya 'Menunggu'
     pending_list = conn.execute('''
         SELECT r.*, u.username as requester 
         FROM reservations r 
@@ -311,7 +469,7 @@ def manage_reservations():
                            username=session.get('username'))
 
 
-# --- [BARU] AKSI ADMIN: SETUJUI ---
+# --- AKSI ADMIN: SETUJUI ---
 @app.route('/approve/<int:id>')
 def approve(id):
     if not session.get('loggedin') or session.get('role') != 'admin':
@@ -321,10 +479,7 @@ def approve(id):
     res = conn.execute('SELECT * FROM reservations WHERE id = ?', (id,)).fetchone()
 
     if res:
-        # Hitung status waktu (apakah langsung Aktif atau masih Terjadwal)
         initial_status = calculate_status(res['reservation_date'], res['start_time'], res['end_time'])
-
-        # Update status jadi status waktu tersebut
         conn.execute('UPDATE reservations SET status = ? WHERE id = ?', (initial_status, id))
         conn.commit()
         flash('Reservasi berhasil disetujui.', 'success')
@@ -333,17 +488,15 @@ def approve(id):
     return redirect(url_for('manage_reservations'))
 
 
-# --- [BARU] AKSI ADMIN: TOLAK ---
+# --- AKSI ADMIN: TOLAK ---
 @app.route('/reject/<int:id>', methods=['POST'])
 def reject(id):
     if not session.get('loggedin') or session.get('role') != 'admin':
         return redirect(url_for('dashboard'))
 
-    # Ambil alasan dari form (popup JS tadi)
     reason = request.form.get('reason', 'Ditolak oleh Admin')
 
     conn = get_db_connection()
-    # Update status jadi 'Ditolak' dan simpan alasannya
     conn.execute('UPDATE reservations SET status = ?, rejection_reason = ? WHERE id = ?', ('Ditolak', reason, id))
     conn.commit()
     conn.close()
@@ -352,7 +505,7 @@ def reject(id):
     return redirect(url_for('manage_reservations'))
 
 
-# --- [BARU] AKSI ADMIN: HAPUS JADWAL ---
+# --- AKSI ADMIN: HAPUS JADWAL ---
 @app.route('/delete_schedule/<int:id>')
 def delete_schedule(id):
     if not session.get('loggedin') or session.get('role') != 'admin':
@@ -377,11 +530,14 @@ def user():
     users = conn.execute('SELECT * FROM users').fetchall()
     conn.close()
 
+    count_admin = len([u for u in users if u['role'] == 'admin'])
+    count_guru = len([u for u in users if u['role'] == 'user'])
+
     return render_template('user.html',
                            users=users,
                            total_user=len(users),
-                           count_admin=0,
-                           count_user=0,
+                           count_admin=count_admin,
+                           count_guru=count_guru,
                            loggedin=True,
                            role='admin',
                            username=session.get('username'))
@@ -431,75 +587,147 @@ def delete_user(user_id):
     return redirect(url_for('user'))
 
 
-# --- API SENSOR IOT ---
+# =========================================
+#             API IOT KONTROL
+# =========================================
 @app.route('/api/sensor', methods=['POST'])
 def api_sensor():
-    data = request.json
-    direction = data.get('direction')
+    # SIMPAN IP ESP32 SECARA OTOMATIS
+    system_state['esp32_ip'] = request.remote_addr
 
+    data = request.json
+
+    # 1. Deteksi Darurat Kebakaran
+    if data and 'emergency' in data:
+        if not system_state['emergency_active']:
+            system_state['emergency_active'] = True
+            system_state['emergency_message'] = data['emergency']
+
+            # Reset penanda ShareLoc dan Evakuasi untuk event kebakaran baru ini
+            system_state['location_sent'] = False
+            system_state['evacuation_notified'] = False
+
+            # Start background thread jika belum jalan
+            if not system_state['thread_running']:
+                bg_thread = threading.Thread(target=emergency_monitor_thread)
+                bg_thread.daemon = True
+                bg_thread.start()
+
+        return jsonify({"status": "emergency_logged"}), 200
+
+    # 2. Deteksi Pengunjung Normal (Masuk / Keluar)
+    direction = data.get('direction')
     if direction in ['in', 'out']:
         conn = get_db_connection()
         conn.execute('INSERT INTO visitor_logs (direction, timestamp) VALUES (?, ?)',
                      (direction, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         conn.commit()
+
+        # HITUNG KRONOLOGIS UNTUK ESP32
+        logs = conn.execute(
+            "SELECT direction FROM visitor_logs WHERE date(timestamp) = date('now', 'localtime') ORDER BY timestamp ASC").fetchall()
         conn.close()
-        return jsonify({"status": "success", "message": f"Data {direction} saved"}), 200
-    else:
-        return jsonify({"status": "error", "message": "Invalid direction"}), 400
 
+        total_dalam = 0
+        is_anomaly = False  # Variabel untuk melacak anomali
 
-# Tambahkan route ini di dalam file app.py Anda (sebelum blok if __name__ == '__main__':)
+        for log in logs:
+            if log['direction'] == 'in':
+                total_dalam += 1
+                is_anomaly = False  # Anomali hilang jika ada yang masuk
+            else:
+                total_dalam -= 1
+                if total_dalam < 0:
+                    total_dalam = 0
+                    is_anomaly = True  # Anomali muncul jika minus (keluar saat kosong)
 
-# --- API UNTUK DASHBOARD (AUTO-REFRESH & FILTER HARI INI SAJA) ---
+        # Cek apakah kapasitas ruangan sudah mencapai batas maksimal
+        is_full = total_dalam >= MAX_KAPASITAS
+
+        # Kirim balasan lengkap ke ESP32 agar ESP32 tahu harus membunyikan alarm apa
+        return jsonify({
+            "status": "success",
+            "message": f"Data {direction} saved",
+            "is_full": is_full,
+            "is_anomaly": is_anomaly
+        }), 200
+
+    return jsonify({"status": "error", "message": "Invalid direction"}), 400
+
 @app.route('/api/stats')
 def get_stats():
     conn = get_db_connection()
-    # Menggunakan date('now', 'localtime') agar otomatis reset ke 0 saat ganti hari
-    masuk = conn.execute(
-        "SELECT COUNT(*) FROM visitor_logs WHERE direction='in' AND date(timestamp) = date('now', 'localtime')"
-    ).fetchone()[0]
-
-    keluar = conn.execute(
-        "SELECT COUNT(*) FROM visitor_logs WHERE direction='out' AND date(timestamp) = date('now', 'localtime')"
-    ).fetchone()[0]
-
+    logs = conn.execute(
+        "SELECT direction FROM visitor_logs WHERE date(timestamp) = date('now', 'localtime') ORDER BY timestamp ASC").fetchall()
     conn.close()
+
+    masuk = 0
+    keluar = 0
+    total_dalam = 0
+    is_anomaly = False
+    anomaly_count = 0
+
+    for log in logs:
+        if log['direction'] == 'in':
+            masuk += 1
+            total_dalam += 1
+            # Begitu masuk, anomali lenyap!
+            is_anomaly = False
+        else:
+            keluar += 1
+            total_dalam -= 1
+            if total_dalam < 0:
+                total_dalam = 0
+                # Anomali muncul jika minus (artinya sensor ngaco di detik ini)
+                is_anomaly = True
+                anomaly_count += 1
 
     return jsonify({
         "masuk": masuk,
         "keluar": keluar,
-        "total": masuk - keluar
+        "total": total_dalam,
+        "is_anomaly": is_anomaly,
+        "anomaly_level": anomaly_count,
+        "is_full": total_dalam >= MAX_KAPASITAS,
+        "emergency": system_state['emergency_active'],
+        "emergency_message": system_state['emergency_message']
     })
 
-# --- TEST HELPER (Untuk simulasi manual) ---
-@app.route('/test_iot/<direction>')
-def test_iot(direction):
-    if direction in ['in', 'out']:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO visitor_logs (direction, timestamp) VALUES (?, ?)',
-                     (direction, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-        conn.commit()
-        conn.close()
-        flash(f'Simulasi sensor: Orang {direction} berhasil ditambahkan!', 'info')
-    return redirect(url_for('dashboard'))
+
+# --- API BARU: Untuk Mematikan Alarm dari Web ke Alat ESP32 ---
+@app.route('/api/stop_alarm', methods=['POST'])
+def api_stop_alarm():
+    # HANYA USER YANG LOGIN YANG BISA MEMATIKAN ALARM
+    if not session.get('loggedin'):
+        return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+    # Mematikan ini akan membuat while loop di thread otomatis berhenti (break)
+    system_state['emergency_active'] = False
+
+    # Tembak sinyal balik (HTTP GET) ke ESP32 berdasarkan IP yang sudah tersimpan
+    if system_state['esp32_ip']:
+        try:
+            url = f"http://{system_state['esp32_ip']}/stop_alarm"
+            urllib.request.urlopen(url, timeout=2)
+        except Exception as e:
+            print(f"Peringatan: Gagal mengirim sinyal mematikan buzzer ke ESP32 ({e})")
+
+    return jsonify({"success": True, "message": "Alarm dimatikan. Laporan AMAN dikirim."})
 
 
-# --- API UNTUK DATA HISTORIS PENGUNJUNG (7 hari terakhir) ---
 @app.route('/api/historical_stats')
 def get_historical_stats():
     conn = get_db_connection()
 
-    # Ambil data 7 hari terakhir
     historical_data = []
     labels = []
 
-    for i in range(6, -1, -1):  # Dari 6 hari lalu sampai hari ini
+    for i in range(6, -1, -1):
         date_obj = date.today() - timedelta(days=i)
         date_str = date_obj.strftime('%Y-%m-%d')
 
-        # Nama hari dalam Bahasa Indonesia
         day_names = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
-        day_index = date_obj.weekday()  # 0=Senin, 1=Selasa, ..., 6=Minggu
+        day_index = date_obj.weekday()
         day_name = day_names[day_index]
 
         masuk = conn.execute(
@@ -523,7 +751,6 @@ def get_historical_stats():
             'total': total
         })
 
-        # Format label: Sen 26/12
         labels.append(f"{day_name}\n{date_str[8:10]}/{date_str[5:7]}")
 
     conn.close()
@@ -534,7 +761,6 @@ def get_historical_stats():
     })
 
 
-# --- ROUTE UNTUK CETAK LAPORAN (LANGSUNG KE HALAMAN CETAK) ---
 @app.route('/print_report')
 def print_report():
     if not session.get('loggedin') or session.get('role') != 'admin':
@@ -544,7 +770,6 @@ def print_report():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
-    # Validasi tanggal
     if not start_date or not end_date:
         flash('Pilih periode laporan terlebih dahulu!', 'warning')
         return redirect(url_for('dashboard'))
@@ -552,7 +777,6 @@ def print_report():
     conn = get_db_connection()
 
     if report_type == 'visitor':
-        # Ambil data pengunjung
         daily_data = []
         summary = {'masuk': 0, 'keluar': 0, 'total': 0}
 
@@ -571,7 +795,6 @@ def print_report():
                 (date_str,)).fetchone()[0]
             total = masuk + keluar
 
-            # Tetap tampilkan meskipun 0 agar laporan lengkap
             daily_data.append({
                 'date': date_str,
                 'day': day_name,
@@ -597,8 +820,7 @@ def print_report():
                                username=session.get('username'),
                                now=datetime.now)
 
-    else:  # report_type == 'reservation'
-        # Ambil data reservasi
+    else:
         reservation_data = conn.execute('''
             SELECT r.*, u.username as requester
             FROM reservations r
@@ -617,7 +839,6 @@ def print_report():
 
         formatted_data = []
         for res in reservation_data:
-            # Hitung summary
             if res['status'] == 'Terjadwal':
                 summary['terjadwal'] += 1
             elif res['status'] == 'Aktif':
@@ -625,7 +846,6 @@ def print_report():
             elif res['status'] == 'Selesai':
                 summary['selesai'] += 1
 
-            # Format untuk template
             formatted_data.append({
                 'date': res['reservation_date'],
                 'start_time': res['start_time'],
@@ -646,6 +866,7 @@ def print_report():
                                summary=summary,
                                username=session.get('username'),
                                now=datetime.now)
+
 
 if __name__ == '__main__':
     init_db()
