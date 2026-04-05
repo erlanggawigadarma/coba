@@ -22,7 +22,7 @@ DELAY_PESAN_DARURAT = 30  # Jeda pengiriman pesan berulang (dalam detik)
 # ======================================================
 # KONFIGURASI ALAMAT & LOKASI GEDUNG (SHARELOC TELEGRAM)
 # ======================================================
-ALAMAT_LENGKAP = "Gedung SMK (Nama Sekolah), Kec. Sooko, Kabupaten Mojokerto, Jawa Timur"
+ALAMAT_LENGKAP = "Lab RPL SMKN 1 DLANGGU, Kec. Dlanggu, Kabupaten Mojokerto, Jawa Timur"
 GEDUNG_LATITUDE = -7.551389
 GEDUNG_LONGITUDE = 112.480417
 
